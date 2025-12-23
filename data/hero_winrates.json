@@ -1,0 +1,510 @@
+{
+  "1": {
+    "name": "Anti-Mage",
+    "winrate": 0.56
+  },
+  "2": {
+    "name": "Axe",
+    "winrate": 0.55
+  },
+  "3": {
+    "name": "Bane",
+    "winrate": 0.45
+  },
+  "4": {
+    "name": "Bloodseeker",
+    "winrate": 0.46
+  },
+  "5": {
+    "name": "Crystal Maiden",
+    "winrate": 0.53
+  },
+  "6": {
+    "name": "Drow Ranger",
+    "winrate": 0.57
+  },
+  "7": {
+    "name": "Earthshaker",
+    "winrate": 0.52
+  },
+  "8": {
+    "name": "Juggernaut",
+    "winrate": 0.5
+  },
+  "9": {
+    "name": "Mirana",
+    "winrate": 0.6
+  },
+  "10": {
+    "name": "Morphling",
+    "winrate": 0.47
+  },
+  "11": {
+    "name": "Shadow Fiend",
+    "winrate": 0.51
+  },
+  "12": {
+    "name": "Phantom Lancer",
+    "winrate": 0.48
+  },
+  "13": {
+    "name": "Puck",
+    "winrate": 0.45
+  },
+  "14": {
+    "name": "Pudge",
+    "winrate": 0.45
+  },
+  "15": {
+    "name": "Razor",
+    "winrate": 0.53
+  },
+  "16": {
+    "name": "Sand King",
+    "winrate": 0.6
+  },
+  "17": {
+    "name": "Storm Spirit",
+    "winrate": 0.62
+  },
+  "18": {
+    "name": "Sven",
+    "winrate": 0.52
+  },
+  "19": {
+    "name": "Tiny",
+    "winrate": 0.47
+  },
+  "20": {
+    "name": "Vengeful Spirit",
+    "winrate": 0.55
+  },
+  "21": {
+    "name": "Windranger",
+    "winrate": 0.46
+  },
+  "22": {
+    "name": "Zeus",
+    "winrate": 0.5
+  },
+  "23": {
+    "name": "Kunkka",
+    "winrate": 0.53
+  },
+  "25": {
+    "name": "Lina",
+    "winrate": 0.49
+  },
+  "26": {
+    "name": "Lion",
+    "winrate": 0.38
+  },
+  "27": {
+    "name": "Shadow Shaman",
+    "winrate": 0.42
+  },
+  "28": {
+    "name": "Slardar",
+    "winrate": 0.54
+  },
+  "29": {
+    "name": "Tidehunter",
+    "winrate": 0.47
+  },
+  "30": {
+    "name": "Witch Doctor",
+    "winrate": 0.54
+  },
+  "31": {
+    "name": "Lich",
+    "winrate": 0.41
+  },
+  "32": {
+    "name": "Riki",
+    "winrate": 0.56
+  },
+  "33": {
+    "name": "Enigma",
+    "winrate": 0.5
+  },
+  "34": {
+    "name": "Tinker",
+    "winrate": 0.59
+  },
+  "35": {
+    "name": "Sniper",
+    "winrate": 0.46
+  },
+  "36": {
+    "name": "Necrophos",
+    "winrate": 0.52
+  },
+  "37": {
+    "name": "Warlock",
+    "winrate": 0.47
+  },
+  "38": {
+    "name": "Beastmaster",
+    "winrate": 0.56
+  },
+  "39": {
+    "name": "Queen of Pain",
+    "winrate": 0.38
+  },
+  "40": {
+    "name": "Venomancer",
+    "winrate": 0.58
+  },
+  "41": {
+    "name": "Faceless Void",
+    "winrate": 0.56
+  },
+  "42": {
+    "name": "Wraith King",
+    "winrate": 0.58
+  },
+  "43": {
+    "name": "Death Prophet",
+    "winrate": 0.49
+  },
+  "44": {
+    "name": "Phantom Assassin",
+    "winrate": 0.48
+  },
+  "45": {
+    "name": "Pugna",
+    "winrate": 0.51
+  },
+  "46": {
+    "name": "Templar Assassin",
+    "winrate": 0.5
+  },
+  "47": {
+    "name": "Viper",
+    "winrate": 0.56
+  },
+  "48": {
+    "name": "Luna",
+    "winrate": 0.5
+  },
+  "49": {
+    "name": "Dragon Knight",
+    "winrate": 0.48
+  },
+  "50": {
+    "name": "Dazzle",
+    "winrate": 0.54
+  },
+  "51": {
+    "name": "Clockwerk",
+    "winrate": 0.54
+  },
+  "52": {
+    "name": "Leshrac",
+    "winrate": 0.49
+  },
+  "53": {
+    "name": "Nature's Prophet",
+    "winrate": 0.43
+  },
+  "54": {
+    "name": "Lifestealer",
+    "winrate": 0.48
+  },
+  "55": {
+    "name": "Dark Seer",
+    "winrate": 0.47
+  },
+  "56": {
+    "name": "Clinkz",
+    "winrate": 0.51
+  },
+  "57": {
+    "name": "Omniknight",
+    "winrate": 0.49
+  },
+  "58": {
+    "name": "Enchantress",
+    "winrate": 0.48
+  },
+  "59": {
+    "name": "Huskar",
+    "winrate": 0.48
+  },
+  "60": {
+    "name": "Night Stalker",
+    "winrate": 0.5
+  },
+  "61": {
+    "name": "Broodmother",
+    "winrate": 0.47
+  },
+  "62": {
+    "name": "Bounty Hunter",
+    "winrate": 0.49
+  },
+  "63": {
+    "name": "Weaver",
+    "winrate": 0.55
+  },
+  "64": {
+    "name": "Jakiro",
+    "winrate": 0.49
+  },
+  "65": {
+    "name": "Batrider",
+    "winrate": 0.51
+  },
+  "66": {
+    "name": "Chen",
+    "winrate": 0.51
+  },
+  "67": {
+    "name": "Spectre",
+    "winrate": 0.46
+  },
+  "68": {
+    "name": "Ancient Apparition",
+    "winrate": 0.56
+  },
+  "69": {
+    "name": "Doom",
+    "winrate": 0.45
+  },
+  "70": {
+    "name": "Ursa",
+    "winrate": 0.53
+  },
+  "71": {
+    "name": "Spirit Breaker",
+    "winrate": 0.52
+  },
+  "72": {
+    "name": "Gyrocopter",
+    "winrate": 0.53
+  },
+  "73": {
+    "name": "Alchemist",
+    "winrate": 0.54
+  },
+  "74": {
+    "name": "Invoker",
+    "winrate": 0.55
+  },
+  "75": {
+    "name": "Silencer",
+    "winrate": 0.52
+  },
+  "76": {
+    "name": "Outworld Destroyer",
+    "winrate": 0.57
+  },
+  "77": {
+    "name": "Lycan",
+    "winrate": 0.46
+  },
+  "78": {
+    "name": "Brewmaster",
+    "winrate": 0.51
+  },
+  "79": {
+    "name": "Shadow Demon",
+    "winrate": 0.48
+  },
+  "80": {
+    "name": "Lone Druid",
+    "winrate": 0.43
+  },
+  "81": {
+    "name": "Chaos Knight",
+    "winrate": 0.51
+  },
+  "82": {
+    "name": "Meepo",
+    "winrate": 0.57
+  },
+  "83": {
+    "name": "Treant Protector",
+    "winrate": 0.49
+  },
+  "84": {
+    "name": "Ogre Magi",
+    "winrate": 0.48
+  },
+  "85": {
+    "name": "Undying",
+    "winrate": 0.5
+  },
+  "86": {
+    "name": "Rubick",
+    "winrate": 0.33
+  },
+  "87": {
+    "name": "Disruptor",
+    "winrate": 0.52
+  },
+  "88": {
+    "name": "Nyx Assassin",
+    "winrate": 0.59
+  },
+  "89": {
+    "name": "Naga Siren",
+    "winrate": 0.5
+  },
+  "90": {
+    "name": "Keeper of the Light",
+    "winrate": 0.47
+  },
+  "91": {
+    "name": "Io",
+    "winrate": 0.45
+  },
+  "92": {
+    "name": "Visage",
+    "winrate": 0.47
+  },
+  "93": {
+    "name": "Slark",
+    "winrate": 0.59
+  },
+  "94": {
+    "name": "Medusa",
+    "winrate": 0.41
+  },
+  "95": {
+    "name": "Troll Warlord",
+    "winrate": 0.59
+  },
+  "96": {
+    "name": "Centaur Warrunner",
+    "winrate": 0.51
+  },
+  "97": {
+    "name": "Magnus",
+    "winrate": 0.54
+  },
+  "98": {
+    "name": "Timbersaw",
+    "winrate": 0.46
+  },
+  "99": {
+    "name": "Bristleback",
+    "winrate": 0.47
+  },
+  "100": {
+    "name": "Tusk",
+    "winrate": 0.56
+  },
+  "101": {
+    "name": "Skywrath Mage",
+    "winrate": 0.48
+  },
+  "102": {
+    "name": "Abaddon",
+    "winrate": 0.47
+  },
+  "103": {
+    "name": "Elder Titan",
+    "winrate": 0.48
+  },
+  "104": {
+    "name": "Legion Commander",
+    "winrate": 0.46
+  },
+  "105": {
+    "name": "Techies",
+    "winrate": 0.53
+  },
+  "106": {
+    "name": "Ember Spirit",
+    "winrate": 0.47
+  },
+  "107": {
+    "name": "Earth Spirit",
+    "winrate": 0.49
+  },
+  "108": {
+    "name": "Underlord",
+    "winrate": 0.47
+  },
+  "109": {
+    "name": "Terrorblade",
+    "winrate": 0.47
+  },
+  "110": {
+    "name": "Phoenix",
+    "winrate": 0.63
+  },
+  "111": {
+    "name": "Oracle",
+    "winrate": 0.48
+  },
+  "112": {
+    "name": "Winter Wyvern",
+    "winrate": 0.56
+  },
+  "113": {
+    "name": "Arc Warden",
+    "winrate": 0.59
+  },
+  "114": {
+    "name": "Monkey King",
+    "winrate": 0.53
+  },
+  "119": {
+    "name": "Dark Willow",
+    "winrate": 0.5
+  },
+  "120": {
+    "name": "Pangolier",
+    "winrate": 0.52
+  },
+  "121": {
+    "name": "Grimstroke",
+    "winrate": 0.46
+  },
+  "123": {
+    "name": "Hoodwink",
+    "winrate": 0.45
+  },
+  "126": {
+    "name": "Void Spirit",
+    "winrate": 0.48
+  },
+  "128": {
+    "name": "Snapfire",
+    "winrate": 0.55
+  },
+  "129": {
+    "name": "Mars",
+    "winrate": 0.53
+  },
+  "131": {
+    "name": "Ringmaster",
+    "winrate": 0.39
+  },
+  "135": {
+    "name": "Dawnbreaker",
+    "winrate": 0.47
+  },
+  "136": {
+    "name": "Marci",
+    "winrate": 0.46
+  },
+  "137": {
+    "name": "Primal Beast",
+    "winrate": 0.55
+  },
+  "138": {
+    "name": "Muerta",
+    "winrate": 0.51
+  },
+  "145": {
+    "name": "Kez",
+    "winrate": 0.58
+  },
+  "155": {
+    "name": "Largo",
+    "winrate": null
+  }
+}

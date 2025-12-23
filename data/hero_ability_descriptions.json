@@ -1,0 +1,1007 @@
+{
+  "npc_dota_hero_antimage": {
+    "antimage_mana_break": "Burns an opponent's mana on each attack and deals damage equal to a percentage of the mana burnt.",
+    "antimage_blink": "Short distance teleportation that allows Anti-Mage to move in and out of combat.",
+    "antimage_counterspell": "Passively grants magic resistance. Counterspell may be activated to create an anti-magic shell around Anti-Mage that blocks and reflects any targeted spells.",
+    "antimage_persectur": "Attacks slow enemies based on how much mana they are missing. Min slow at 50% mana, up to max slow at 0% mana. No effect if enemy is above 50% mana.",
+    "antimage_mana_void": "For each point of mana missing by the target unit, damage is dealt to it and surrounding enemies. The main target is also mini-stunned."
+  },
+  "npc_dota_hero_axe": {
+    "axe_berserkers_call": "Axe taunts nearby enemy units, forcing them to attack him while he gains bonus armor during the duration.",
+    "axe_battle_hunger": "Enrages an enemy unit, causing it to take damage over time until it kills another unit or the duration ends. The enemy is slowed as long as they are facing away from Axe.",
+    "axe_counter_helix": "After a set number of attacks, Axe will perform a helix counter attack, dealing pure damage to all nearby enemies.",
+    "axe_culling_blade": "Axe spots a weakness and strikes, dealing pure damage. When an enemy hero is killed with Culling Blade, its cooldown is reset, and all nearby allied units gain bonus movement speed and armor.",
+    "axe_coat_of_blood": "Axe permanently drenches his blade every time he kills an enemy Hero, gaining 0.2 bonus armor for each stack. Killing with Culling Blade gives 3x stacks."
+  },
+  "npc_dota_hero_bane": {
+    "bane_enfeeble": "Deals damage every second and lowers the enemy's total attack damage and cast range.",
+    "bane_brain_sap": "Feasts on the vital energies of an enemy unit, healing Bane and dealing damage.",
+    "bane_nightmare": "Puts the target enemy or friendly Hero to sleep. Sleeping units are awakened when damaged. If the target was directly attacked, the Nightmare passes to the attacking unit. Bane can attack and damage Nightmared targets freely.",
+    "bane_fiends_grip": "CHANNELED - Grips an enemy unit, disabling it and causing heavy damage over time, while stealing mana every 0.5 seconds based on the unit's maximum mana.",
+    "bane_nightmare_end": "Ends all ongoing Nightmares.",
+    "bane_ichor_of_nyctasha": "Bane's attribute gains are always evenly distributed across all three attributes (items that grant +3 Strength will now grant +1 Str/Agi/Int)."
+  },
+  "npc_dota_hero_bloodseeker": {
+    "bloodseeker_bloodrage": "Drives Bloodseeker or an allied hero into a bloodthirsty rage which causes them to attack faster and deal more spell damage at the cost of a percentage of their health per second. Provides half attack speed to allied heroes.",
+    "bloodseeker_blood_bath": "Bloodseeker baptizes an area in sacred blood. After 2.9 seconds the ritual completes, causing any enemies caught in the area to take damage and become silenced.",
+    "bloodseeker_thirst": "Bloodseeker is invigorated by the wounds of his enemies, gaining bonus movement speed when an enemy hero's health falls below 100%, with the bonuses increasing as their health falls further. If an enemy hero's health falls below 25%, he will also gain vision and True Sight of that hero. Bonuses stack per hero. Unlocks max movement speed for Bloodseeker.",
+    "bloodseeker_sanguivore": "Bloodseeker restores some life when he kills a unit, equal to 30 health plus a percentage of the units max health.\n\nRestores for half values if an ally kills a nearby enemy hero.",
+    "bloodseeker_rupture": "Causes an enemy unit's skin to rupture, dealing initial damage based on its current health. If the unit moves, it takes damage based on the distance moved."
+  },
+  "npc_dota_hero_crystal_maiden": {
+    "crystal_maiden_crystal_nova": "A burst of damaging frost slows enemy movement in the targeted area.",
+    "crystal_maiden_frostbite": "Encases an enemy unit in ice, prohibiting movement and attack, while dealing damage over time. Deals 4x damage to non-ancient creeps.",
+    "crystal_maiden_brilliance_aura": "Gives additional mana regeneration to all friendly units on the map. Allies within a 1200 radius of Crystal Maiden receive 3x the mana regeneration.",
+    "crystal_maiden_crystal_clone": "Slides in a direction, creating a crystal clone of herself in her place and disjointing incoming projectiles. If the clone takes enough damage or times out, it shatters, Frostbiting enemies in a 450 AoE around its place. The Clone can also be destroyed by Crystal Maiden's own spells.",
+    "crystal_maiden_blueheart_floe": "Crystal Maiden has 25% Mana Regeneration Amplification.",
+    "crystal_maiden_freezing_field": "CHANNELED - Surrounds Crystal Maiden with 100 random icy explosions that slow enemies and deal massive damage. Lasts 10 seconds.",
+    "crystal_maiden_freezing_field_stop": "Immediately stops the Freezing Field"
+  },
+  "npc_dota_hero_drow_ranger": {
+    "drow_ranger_frost_arrows": "Adds a freezing effect to Drow's attacks, slowing enemy movement and dealing bonus damage. Slow lasts 1.5 seconds.",
+    "drow_ranger_wave_of_silence": "Releases a wave that silences and knocks back and reveals invisible enemy units. Knockback distance is relative to how close they are to Drow.",
+    "drow_ranger_multishot": "CHANNELED - Drow releases a flurry of arrows in continuous salvos, hitting enemies for extra damage and applying Frost Arrows. Lasts up to 1.75 seconds.",
+    "drow_ranger_glacier": "Drow creates a hill of ice beneath her. While standing on the hill, attackers gain bonus attack range and high ground advantage - they cannot miss and gain flying vision. Drow additionally gets bonus Multishot arrows per wave while on the hill. The front of the hill obscures vision and cannot be moved through except by Drow. Does not interrupt Multishot when cast.",
+    "drow_ranger_trueshot": "Grants Drow bonus agility based on Drow's current agility and level. Nearby ranged heroes received 50% of the bonus agility.",
+    "drow_ranger_marksmanship": "Drow's experiences in battle grant her a chance to launch arrows with incredible accuracy and effectiveness. Pierces through the enemy's defenses, ignoring their base armor. This ability is disabled if there is an enemy hero within 325 range."
+  },
+  "npc_dota_hero_earthshaker": {
+    "earthshaker_fissure": "Slams the ground with a mighty totem, creating an impassable ridge of stone while stunning and damaging enemy units along its line.",
+    "earthshaker_enchant_totem": "Empowers Earthshaker's totem, causing it to deal extra damage and have 100 bonus attack range on the next attack.",
+    "earthshaker_aftershock": "Causes the earth to shake underfoot, adding additional damage and stuns to nearby enemy units when Earthshaker casts his abilities.",
+    "earthshaker_echo_slam": "Shockwaves travel through the ground, damaging enemy units. Each enemy hit causes an echo to damage nearby units. Real heroes cause two echoes.",
+    "earthshaker_slugger": "Enemies killed with Enchant Totem or Earthshaker's other abilities are sent flying, dealing damage to enemies they hit."
+  },
+  "npc_dota_hero_juggernaut": {
+    "juggernaut_blade_fury": "Causes a bladestorm of destructive force around Juggernaut, rendering him debuff immune, increasing his magic resistance by 80%, and dealing damage every 0.2s to nearby enemy units. Applies a strong dispel at the end of the spin.",
+    "juggernaut_healing_ward": "Summons a Healing Ward which heals all nearby allied units, based on their max health. The Healing Ward moves at 325 movement speed after being summoned. Lasts 25 seconds.",
+    "juggernaut_blade_dance": "Gives Juggernaut a chance to deal critical damage on each attack.",
+    "juggernaut_swift_slash": "Performs a short Omnislash for 1 seconds.",
+    "juggernaut_duelist": "Juggernaut deals 12% more damage to targets that are facing him. Damage bonus always applies during Omnislash.",
+    "juggernaut_omni_slash": "Juggernaut leaps towards the target enemy units, and then slashes the target and other nearby enemy units at an increased attack rate. Juggernaut is invulnerable for the duration.\n\nDISPEL TYPE: Basic Dispel"
+  },
+  "npc_dota_hero_mirana": {
+    "mirana_starfall": "Calls down a wave of meteors to damage nearby enemy units. The closest enemy unit to Mirana in a 675 radius will be struck a second time.",
+    "mirana_arrow": "Fires a long-range arrow with deadly precision, which stuns and damages the first enemy unit it strikes. The stun duration ranges from 0.01 to 2.6 seconds, with bonus damage up to 180 added, based on the distance the arrow travels to its target. Instantly kills the first non-ancient creep it hits.",
+    "mirana_leap": "Mirana leaps forward into battle, empowering herself with a ferocious roar that grants bonus attack and movement speed. Speed bonus lasts 5 seconds.",
+    "mirana_selemenes_faithful": "Healing Lotuses are 50% more effective on Mirana and her allies.",
+    "mirana_invis": "Turns Mirana and all allied heroes invisible and grants bonus movement speed. Mirana gains bonus outgoing damage during the duration. If a hero is revealed, invisibility will restore after the fade delay as long as Moonlight Shadow's duration has not expired."
+  },
+  "npc_dota_hero_nevermore": {
+    "nevermore_shadowraze1": "Shadow Fiend razes the ground directly in front of him, dealing damage to enemy units in the area. Adds a stacking damage amplifier on the target that causes the enemy to take bonus Shadowraze damage per stack.",
+    "nevermore_shadowraze2": "Shadow Fiend razes the ground a short distance away from him, dealing damage to enemy units in the area. Adds a stacking damage amplifier on the target that causes the enemy to take bonus Shadowraze damage per stack.",
+    "nevermore_shadowraze3": "Shadow Fiend razes the ground a longer distance away from him, dealing damage to enemy units in the area. Adds a stacking damage amplifier on the target that causes the enemy to take bonus Shadowraze damage per stack.",
+    "nevermore_frenzy": "Shadow Fiend gains Bonus Attack Speed and Movement Speed for 8 seconds. For the duration of the effect, Necromastery's Max Soul count is increased by 5, but he loses that amount of souls after it is done.",
+    "nevermore_dark_lord": "Shadow Fiend's presence reduces the armor of nearby enemies.",
+    "nevermore_requiem": "Shadow Fiend gathers his captured souls to release them as lines of demonic energy. Units near Shadow Fiend when the souls are released can be damaged by several lines of energy. Any unit damaged by Requiem of Souls will be feared and have its movement speed and magic resistance reduced for 0.6 seconds for each line hit up to a maximum of 2.15. Lines of energy are created for every soul captured through Necromastery. \n\n Requiem of Souls is automatically cast whenever Shadow Fiend dies, regardless of its cooldown.",
+    "nevermore_necromastery": "Shadow Fiend steals the soul from units he kills, gaining bonus damage. Hero kills grant 4 souls. On death, he releases 30% of them from bondage."
+  },
+  "npc_dota_hero_morphling": {
+    "morphling_waveform": "Morphling dissolves into liquid and surges forward, damaging enemy units in his path. Morphling is invulnerable during Waveform.",
+    "morphling_adaptive_strike_agi": "Launches a surge of water toward an enemy unit, dealing base damage plus additional damage based on Morphling's agility times a multiplier. If Morphling's agility is 50% higher than strength, the maximum agility multiplier is used.\n\nThe target is also knocked back and stunned based on Morphling's strength. If his strength is 50% higher than his agility, the maximum knockback distance and stun is used.",
+    "morphling_morph_agi": "Morphling shifts its form, pulling points from Strength and pouring them into Agility. The process is reversible. Additional points in Attribute Shift increase the rate of stat change.",
+    "morphling_morph_str": "Morphling shifts its form, pulling points from Agility and pouring them into Strength. The process is reversible. Additional points in Attribute Shift increase the rate of stat change.",
+    "morphling_replicate": "Morphling changes his form to match the targeted enemy, gaining their basic abilities. Can be toggled for the duration of the ability.",
+    "morphling_morph_replicate": "Toggles Morphling's form between his own and the replicated enemy.",
+    "morphling_accumulation": "Morphling receives 50% of stat growth bonuses every half level instead of the full bonus at level up. All Attributes bonuses from skill points in the Talent Tree provide an additional +3 to Morphling's primary attribute."
+  },
+  "npc_dota_hero_phantom_lancer": {
+    "phantom_lancer_spirit_lance": "Sends a magical spirit lance to a target enemy unit that damages and slows, while summoning an illusory phantom to attack the unit.",
+    "phantom_lancer_doppelwalk": "Phantom Lancer briefly vanishes from the battlefield. After 1 second, Phantom Lancer and any of his nearby illusions reappear at a random position within the targeted location, along with two additional doppelgangers. Extends duration of all illusions. The two added doppelgangers have different properties: one takes normal damage and deals none, while the other takes 500% bonus damage and deals -80% less damage.\n\nDISPEL TYPE: Basic Dispel",
+    "phantom_lancer_phantom_edge": "When targeting an enemy for an attack, Phantom Lancer quickly charges into range, gaining bonus movement speed and evasion. Phantom Lancer's illusions also have this ability.",
+    "phantom_lancer_illusory_armaments": "Whenever an illusion of Phantom Lancer is created, its outgoing damage cannot go below a fixed value for 3 seconds.",
+    "phantom_lancer_juxtapose": "Phantom Lancer has a chance to fracture his presence on an attack, creating an illusion of himself. Illusions also have a chance to fracture further. Illusions created from Phantom Lancer last for 8 seconds, while illusions created from other illusions last 4 seconds."
+  },
+  "npc_dota_hero_puck": {
+    "puck_illusory_orb": "Puck launches a magic orb that floats in a straight path, damaging enemy units along the way. At any point, Puck may teleport to the orb's location using Ethereal Jaunt.",
+    "puck_waning_rift": "Puck teleports to the target location and releases a burst of faerie dust that deals damage and silences enemy units nearby.",
+    "puck_phase_shift": "CHANNELED - Puck briefly shifts into another dimension where it is immune from harm.",
+    "puck_ethereal_jaunt": "Teleports Puck to a flying Illusory Orb.",
+    "puck_puckish": "Whenever Puck disjoints an attack, it restores 10 + 2% of its max mana and 10 + 2% of its max health. Dodging a targeted spell projectile restores 3.5x that amount. Does not apply to attacks by Towers.",
+    "puck_dream_coil": "Creates a coil of volatile magic that latches onto enemy Heroes, damaging and leashing them. If the enemy hero stretches the coil by moving too far away, it snaps, stunning and dealing additional damage."
+  },
+  "npc_dota_hero_pudge": {
+    "pudge_meat_hook": "Launches a bloody hook toward a unit or location. The hook will snag the first unit it encounters, dragging the unit back to Pudge, killing it if it's a non-ancient creep and dealing damage if it is an enemy otherwise.",
+    "pudge_rot": "A toxic cloud that deals intense damage and slows movement--harming not only enemy units but Pudge himself.",
+    "pudge_flesh_heap": "Pudge covers himself with a layer of flesh that blocks damage of any type taken from any source.",
+    "pudge_innate_graft_flesh": "Pudge's skin thickens permanently every time he kills an enemy Hero, gaining 1.1 bonus Strength for each stack.",
+    "pudge_dismember": "CHANNELED - Pudge chows down on an enemy unit, disabling it and dealing damage over time. Damage is increased by Pudge's Strength and heals him for the total amount. Pudge pulls the unit at a rate of 75 units, up to a minimum of 125 range."
+  },
+  "npc_dota_hero_razor": {
+    "razor_plasma_field": "Releases a wave of energetic plasma that grows in power as it expands, but also zaps on contraction, slowing and dealing damage to enemy units caught in its path. Damage and slow increases with distance from Razor. The Plasma Field hits each unit twice, once each direction.",
+    "razor_static_link": "Creates a charged link between Razor and an enemy Hero, stealing damage from the target and giving it to Razor. Allows Razor to attack while moving with the link active.",
+    "razor_storm_surge": "There's a chance when attacked, and always when targeted with a spell, to release a forked lightning that strikes the target and other nearby enemies, prioritizing the unit type of the attacker, dealing damage and slowing movement speed.",
+    "razor_eye_of_the_storm": "A powerful lightning storm strikes out at the enemy unit with the lowest health, dealing damage and reducing armor."
+  },
+  "npc_dota_hero_sand_king": {
+    "sandking_burrowstrike": "Sand King burrows into the ground and tunnels forward, damaging and stunning enemy units above him as he resurfaces. Adds Caustic Finale poison to heroes hit\n\n Can be put on alt-cast to immediately cast in the desired direction, without walking towards the targeted location.",
+    "sandking_sand_storm": "Sand King creates a fearsome sandstorm that damages enemy units and grants Sand King Invisibility while he is in it. The effect ends when Sand King leaves the area.",
+    "sandking_scorpion_strike": "Sand King strikes an area, performing an attack on all enemies in the area of effect, dealing extra damage. Enemies within an innermost radius of 125 take 40% extra damage. Applies Caustic Finale and a slow to all enemies hit.",
+    "sandking_caustic_finale": "Sand King's attacks inject a venom that causes enemy units to violently explode when they die.",
+    "sandking_epicenter": "After a cast point of 2 seconds, Sand King sends a disturbance into the earth, causing it to shudder violently. All enemies caught within range will take damage and become slowed. Each subsequent pulse increases the radius of damage dealt."
+  },
+  "npc_dota_hero_storm_spirit": {
+    "storm_spirit_static_remnant": "Creates an explosively charged image of Storm Spirit that lasts 12 seconds and will detonate and deal damage if an enemy unit comes near it.",
+    "storm_spirit_electric_vortex": "A vortex that pulls an enemy unit to Storm Spirit's location.",
+    "storm_spirit_overload": "Casting a spell creates an electrical charge, which is released in a burst on Storm's next attack, dealing damage and slowing nearby enemies.",
+    "storm_spirit_ball_lightning": "Storm Spirit becomes volatile electricity, charging across the battlefield until he depletes his mana or reaches his target. The activation mana cost is 25+7.5% of his total mana pool, and the cost per 100 units traveled is 10+0.65% of his total mana pool. Damage is expressed in damage per 100 units traveled.",
+    "storm_spirit_galvanized": "Storm Spirit gains a charge of 0.2 mana regeneration per kill. Loses 2 charges per death. Leveling Ball Lightning gives Storm Spirit 3 bonus charges. Additionally every time he gains a charge he also gains 0.1 Mana Regen permanently."
+  },
+  "npc_dota_hero_sven": {
+    "sven_storm_bolt": "Sven unleashes his magical gauntlet that deals damage and stuns enemy units in a small area around the target.",
+    "sven_great_cleave": "Sven strikes with great force, cleaving all nearby enemy units with his attack.",
+    "sven_warcry": "Sven's Warcry heartens his allied heroes for battle, increasing their armor and movement speed. Lasts 8 seconds.",
+    "sven_gods_strength": "Sven channels his rogue strength, granting bonus damage and slow resistance for 30 seconds.",
+    "sven_vanquisher": "Sven's attacks deal 20% bonus damage to stunned enemies."
+  },
+  "npc_dota_hero_tiny": {
+    "tiny_avalanche": "Bombards an area with rocks, continously doing small intervals of damage and stun to enemy units.",
+    "tiny_toss": "Grabs the nearest unit in a 300 radius around Tiny, ally or enemy, and launches it at the target unit or rune to deal damage where they land.",
+    "tiny_tree_grab": "Grabs a tree to whack enemies on the head for a limited number of attacks. Grants bonus attack range. Attacks deal more damage and fully splash on units along the way. The tree can be thrown, to deal your attack to a unit at a distance.",
+    "tiny_tree_channel": "CHANNELED - Tiny channels to throw random trees within range towards the targeted area. Deals Tiny's attack damage to enemies in that area with each tree thrown.",
+    "tiny_craggy_exterior": "Enemies that attack Tiny receive a stacking debuff that lowers their attack damage with each stack.",
+    "tiny_grow": "Tiny gains craggy mass, increasing his attack damage, movement speed and armor, and toss power while slowing his attack speed.",
+    "tiny_toss_tree": "Throws the tree at the target unit, proccing your attack on it and splashing damage around the target."
+  },
+  "npc_dota_hero_vengefulspirit": {
+    "vengefulspirit_magic_missile": "Fires a magic missile at an enemy unit, stunning and dealing damage.",
+    "vengefulspirit_wave_of_terror": "Vengeful Spirit lets loose a wicked cry, weakening the total attack damage and armor of enemies, and giving vision of the path ahead.",
+    "vengefulspirit_command_aura": "Vengeful Spirit's presence increases the damage of nearby friendly heroes.",
+    "vengefulspirit_retribution": "Whenever an enemy hero kills Vengeful Spirit, they get a debuff until their next death, causing Vengeful Spirit to deal 20% bonus damage to them.",
+    "vengefulspirit_nether_swap": "Instantaneously swaps positions with a target Hero, friend or enemy. Nether Swap interrupts channeling abilities on the target. Enemy Swapped units take damage. Vengeful Spirit and allied swapped units gain a barrier equal to the damage dealt."
+  },
+  "npc_dota_hero_windrunner": {
+    "windrunner_shackleshot": "Shackles the target to an enemy unit or tree in a line directly behind it. If no unit or tree is present, the stun duration is reduced to 0.6.",
+    "windrunner_powershot": "CHANNELED - Windranger charges her bow for up to 1 second for a single powerful shot, which deals more damage the longer it is charged. The arrow damages and slows enemies' movement speed along its path. For each enemy that Powershot hits, its damage and slow is reduced.",
+    "windrunner_windrun": "Increases movement speed and adds evasion from all physical attacks.",
+    "windrunner_gale_force": "Vector Targeted. Summons a strong wind that pushes all enemies in the target area towards the target direction.",
+    "windrunner_focusfire_cancel": "End your Focus Fire early.",
+    "windrunner_focusfire": "Windranger channels the wind to gain 0 additional attack speed against a single enemy unit or structure, though with a reduction to her attack damage. Extra damage from secondary item effects is not reduced.",
+    "windrunner_easy_breezy": "Windranger's movement speed cannot be lower than 240 and can reach 600."
+  },
+  "npc_dota_hero_zuus": {
+    "zuus_arc_lightning": "Hurls a bolt of lightning that leaps through nearby enemy units that deal damage.",
+    "zuus_lightning_bolt": "Calls down a bolt of lightning to strike an enemy unit, causing damage and a mini-stun. When cast, Lightning Bolt briefly provides unobstructed vision and True Sight around the target in a 500 radius. Can be cast on the ground, affecting the closest enemy hero in 325 range.",
+    "zuus_heavenly_jump": "Zeus performs a Heavenly Jump, leaping forward and shocking the closest visible nearby enemy (prioritizing heroes), dealing damage as well as reducing their movement and attack speed. Zeus gets 900 unobstructed vision around him for 3 seconds.",
+    "zuus_cloud": "Creates a storm cloud anywhere on the map that automatically casts Lightning Bolt on nearby enemies.",
+    "zuus_lightning_hands": "Zeus gains bonus attack speed and his attacks create Arc Lightnings that deal a percentage of its damage. Can be toggled off to stop this effect.",
+    "zuus_thundergods_wrath": "Strikes all enemy heroes with a bolt of lightning, dealing damage, no matter where they may be.\n\nThundergod's Wrath also provides True Sight around each hero struck. If an enemy hero is invisible, it takes no damage, but the True Sight is still created at that hero's location.",
+    "zuus_static_field": "Zeus shocks any enemy that he attacks or is hit by his abilities, causing damage equal to a percentage of their current health."
+  },
+  "npc_dota_hero_kunkka": {
+    "kunkka_torrent": "Summons a rising torrent that, after a short delay, hurls enemy units into the sky, stunning, dealing damage and slowing movement speed.",
+    "kunkka_tidebringer": "Kunkka's legendary sword grants increased damage and cleaves a large area of effect in front of him for a single strike.",
+    "kunkka_x_marks_the_spot": "Targets a friendly or enemy Hero, marks their position with an X, and returns them to it after several seconds. Kunkka can trigger the return at any time during the duration. Lasts twice as long on allied heroes.",
+    "kunkka_tidal_wave": "Releases a Tidal Wave that spawns behind Kunkka. Deals damage and drags enemies along it. Enemies cannot attack while being dragged.",
+    "kunkka_ghostship": "Summons a ghostly ship that sails through the battle before smashing apart, damaging and stunning all enemies caught near the wreckage. Allied heroes touched by the Ghostship are given a strong swig of The Admiral's Rum, receiving bonus movement speed and a delayed reaction to incoming damage.",
+    "kunkka_return": "Returns the marked hero to the X."
+  },
+  "npc_dota_hero_lina": {
+    "lina_dragon_slave": "Lina channels the breath of a dragon, sending out a wave of fire that scorches every enemy in its path.",
+    "lina_light_strike_array": "Summons a column of flames that damages and stuns enemies.",
+    "lina_fiery_soul": "Grants bonus attack and movement speed each time Lina hits an enemy with a spell. Stacks with itself. Lasts 18 seconds.",
+    "lina_flame_cloak": "Grants Lina unobstructed movement and increases her spell damage and magic resistance. Grants max fiery soul stacks on activation.",
+    "lina_combustion": "Every 175 damage Lina does to an enemy hero causes them to overheat, doing damage to their nearby allies. This effect can trigger multiple times off a single instance of damage. Overheated illusions do less damage.",
+    "lina_laguna_blade": "Fires off a bolt of lightning at a single enemy unit, dealing massive damage."
+  },
+  "npc_dota_hero_lich": {
+    "lich_frost_nova": "Blasts the target enemy unit with damaging frost, dealing area damage and slowing movement and attack rates for 4 seconds. The primary target receives both base and area damage.",
+    "lich_frost_shield": "Applies a magical frost shield around the target, reducing damage from attacks against it. While the shield is active, ice magic will affect nearby enemy units every 1 seconds, dealing minor damage and slowing them.",
+    "lich_sinister_gaze": "CHANNELED - Hypnotizes an enemy unit, causing it to move towards a point between the two of you and drains a percentage of its current mana.",
+    "lich_ice_spire": "Creates an Ice Spire at the target spot, slowing enemies around it. Can take 4 hero hits or 8 creep hits and when destroyed it will create a Frost Blast around it.\n\nChain Frost can be cast on the Spire and can bounce to the Spire and damage the spire by 1 hero attack if there are no other enemies in range.\n\nLich can cast Frost Shield on the Spire. Each Frost Shield tick will heal the spire by 1 hero attack.",
+    "lich_death_charge": "Lich cannot gain passive mana regeneration, but any unit dying within 1500 range of Lich restores 2.5% of his Max Mana (Dying heroes restore 25% of Lich's Max Mana). Instant mana restoration from items and abilities apply to Lich as normal.",
+    "lich_chain_frost": "Releases an orb of frost that bounces between nearby enemy units up to 10 times, slowing and damaging each time it hits. Each bounce increases the damage for the subsequent bounces. Chain Frost lingers on its last target if it fails to bounce and can bounce again if new targets become available."
+  },
+  "npc_dota_hero_lion": {
+    "lion_impale": "Rock spikes burst from the earth along a straight path. Enemy units are hurled into the air, then are stunned and take damage when they fall.",
+    "lion_voodoo": "Transforms an enemy unit into a harmless beast, with all special abilities disabled.",
+    "lion_mana_drain": "CHANNELED - Channels magical energy, taking mana and slowing enemies over time. If the enemy has no mana remaining, the slow is increased by 15%. \n\n Can target allies to give them mana and movement speed at a 50% rate.",
+    "lion_to_hell_and_back": "Lion gains 20% debuff duration and 20% spell amplification for 90s after respawning.",
+    "lion_finger_of_death": "Rips at an enemy unit, trying to turn it inside-out. Deals massive damage and grows stronger with each life it consumes."
+  },
+  "npc_dota_hero_shadow_shaman": {
+    "shadow_shaman_ether_shock": "Creates a cone of ethereal energy that strikes multiple enemy units.",
+    "shadow_shaman_voodoo": "Transforms an enemy unit into a harmless creature, disabling their attacks and abilities.",
+    "shadow_shaman_shackles": "CHANNELED - Magically binds an enemy unit so that it cannot move or attack, absorbing their life energy over time.",
+    "shadow_shaman_fowl_play": "When taking lethal damage, Shadow Shaman receives a strong dispel and survives as a 1 HP chicken. Incoming damage is reduced to zero for 1s.Cooldown is reset upon respawning.\n\nDISPEL TYPE: Strong Dispel",
+    "shadow_shaman_mass_serpent_ward": "Summons 10 Serpent Wards to attack enemy units and structures. The Wards are immune to magic. Creeps deal half damage to the Serpent Ward."
+  },
+  "npc_dota_hero_slardar": {
+    "slardar_sprint": "Slardar slithers ahead, moving significantly faster and passing through units.",
+    "slardar_slithereen_crush": "Slams the ground, leaving a puddle of water, and stunning and damaging nearby enemy units. After the stun, the affected units are slowed.",
+    "slardar_bash": "After 3 attacks, your next attack will bash the target.",
+    "slardar_seaborn_sentinel": "Slardar gains bonus movement speed, health regeneration, attack damage, and armor while in a puddle, trail, or river.",
+    "slardar_amplify_damage": "Reduces enemy armor to amplify physical damage and provides True Sight and vision of the targeted unit, revealing invisibility. The enemy unit leaves a trail of water behind it."
+  },
+  "npc_dota_hero_tidehunter": {
+    "tidehunter_gush": "Summons a gush of water to damage an enemy unit, reducing their movement speed and armor.",
+    "tidehunter_kraken_shell": "Thickens Tidehunter's hide to passively block a portion of any incoming physical attack damage. Reduced block amount versus creeps.\n\nCan be activated to double the block amount at the cost of 40% movement speed. Lasts 4s.",
+    "tidehunter_anchor_smash": "Tidehunter swings his mighty anchor to attack and deal bonus damage to nearby enemies and reduce their attack damage.",
+    "tidehunter_dead_in_the_water": "Tidehunter attaches a heavy anchor to an enemy hero. The hero is leashed while attached to the anchor. Attempting to move more than 350 units away from the anchor forces the hero to 100 move speed, dragging the anchor behind them. The anchor can be destroyed with 4 hero attacks.",
+    "tidehunter_ravage": "Slams the ground, causing tentacles to erupt in all directions, damaging and stunning all nearby enemy units.",
+    "tidehunter_blubber": "Tidehunter's hide removes negative status effects if he takes more than 450 damage. Removes most debuffs, even if they are generally not purgable.\n\nDISPEL TYPE: Strong Dispel"
+  },
+  "npc_dota_hero_witch_doctor": {
+    "witch_doctor_paralyzing_cask": "Launches a cask of paralyzing powder that ricochets between enemy units, stunning and damaging those it hits. Damage increases each bounce.",
+    "witch_doctor_voodoo_restoration": "Witch Doctor focuses his magic to heal nearby allied units, costing Witch Doctor mana every second Voodoo Restoration is active.",
+    "witch_doctor_maledict": "Curses all enemy Heroes and player-controlled units in a small area, causing them to take a set amount of damage each second, as well as bursts of damage every 4 seconds based on how much health they have lost since the curse began.",
+    "witch_doctor_voodoo_switcheroo": "Turns Witch Doctor into a Death Ward briefly with reduced attack speed. He is hidden during this time.",
+    "witch_doctor_gris_gris": "Witch Doctor gets a Gris-Gris, an item that cannot be dropped or placed in the backpack. When the owner dies, 100% of the gold lost from death is added to the item, and will be refunded when the item is consumed. The value of the Gris-Gris is increased by 1 every 3s. \n\n Right-click to consume and permanently remove the item.",
+    "witch_doctor_death_ward": "CHANNELED - Summons a deadly ward to attack enemy heroes within its attack range. Lasts a maximum of 8 seconds. Death Ward has 50% bonus accuracy."
+  },
+  "npc_dota_hero_riki": {
+    "riki_smoke_screen": "Throws down a smoke bomb, silencing enemies and causing them to miss attacks.",
+    "riki_blink_strike": "Teleports behind the target unit, momentarily slowing them and attacking them with bonus damage if it is an enemy.",
+    "riki_tricks_of_the_trade": "CHANNELED - Riki phases out of the world and periodically strikes 2 random enemy units from behind in an area around him. He has fixed attack damage while phased out.",
+    "riki_innate_backstab": "Every time Riki strikes his enemy from behind, he deals additional bonus damage equal to a multiple of his Agility.",
+    "riki_backstab": "Riki fades into the shadows, becoming invisible until he attacks. Hero kills and assists grant additional experience."
+  },
+  "npc_dota_hero_enigma": {
+    "enigma_malefice": "Focuses Enigma's power on a target, causing it to take damage and become repeatedly stunned for multiple instances. An instance strikes every 2 seconds.",
+    "enigma_demonic_conversion": "Summons three fragments of Enigma himself at the cost of health. The eidolons health is increased by 3% of Enigma's current health. These eidolons are all under Enigma's control, and repeated successful attacks cause them to multiply. When this happens, the eidolons have their health restored.",
+    "enigma_midnight_pulse": "Steeps an area in dark resonance, dealing damage to enemies every 0.5s.",
+    "enigma_gravity_well": "Allies within 500 distance from Enigma have up to 9% Damage Reduction. Effect starts at 0% at max distance and increases to its maximum strength when the ally is at 200 distance. Does not affect Enigma itself.",
+    "enigma_black_hole": "CHANNELED - Summons a vortex that sucks in nearby enemy units. Enemies affected by Black Hole cannot move, attack, or cast spells."
+  },
+  "npc_dota_hero_tinker": {
+    "tinker_laser": "Fires an intense energy beam, damaging and blinding the target. Blinded targets miss all physical attacks.",
+    "tinker_march_of_the_machines": "Enlists an army of robotic minions to destroy enemy units in an area around Tinker.",
+    "tinker_defense_matrix": "Targets an allied unit, applying an all damage barrier to them that also provides Status Resistance.",
+    "tinker_warp_grenade": "Throws a flare towards an enemy, dealing damage, teleporting them away, rooting them and reducing their Cast and Attack Range for 2 seconds.\n\n The teleport location is always the ability's current cast range + 100 from Tinker's position when he threw the flare.",
+    "tinker_keen_teleport": "CHANNELED - Teleport to a target friendly structure. Level 2 allows teleporting to friendly units and Level 3 to friendly heroes.",
+    "tinker_rearm": "CHANNELED - Resets the cooldown on Tinker's abilities.",
+    "tinker_eureka": "Tinker gains 1% item cooldown reduction per 3 Intelligence, up to a maximum of 60%."
+  },
+  "npc_dota_hero_sniper": {
+    "sniper_shrapnel": "Consumes a charge to launch a ball of shrapnel that showers the target area in explosive pellets. Enemies are subject to damage and slowed movement. Reveals the targeted area. Shrapnel charges restore every 35 seconds.",
+    "sniper_headshot": "Sniper increases his accuracy, giving him a chance to deal extra damage and knock back his enemies. Knockback distance increases based on how close the enemy is to Sniper. Headshots briefly slow enemy movement and attack speed by -100%.",
+    "sniper_take_aim": "Increases vision range, Headshot chance, and attack range. Slows you by 65% for the duration and restricts your vision to a frontal cone.",
+    "sniper_concussive_grenade": "Launches a grenade at the target area, dealing damage to enemies and knocking them and Sniper himself back. Enemies affected are disarmed and have their movement slowed after the knockback.",
+    "sniper_keen_scope": "Increases Sniper's attack range.",
+    "sniper_assassinate": "Sniper locks onto a target enemy unit and, after a short aiming duration, fires a devastating shot that delivers an amplified attack plus bonus damage at long range and mini-stuns the target. Whenever Sniper kills an enemy hero, Assassinate is refreshed."
+  },
+  "npc_dota_hero_necrolyte": {
+    "necrolyte_death_pulse": "Necrophos releases a wave of death around him, dealing damage to enemy units and healing allied units.",
+    "necrolyte_ghost_shroud": "Necrophos slips into the realm that separates the living from the dead. Unable to attack or be attacked, he emits an aura that slows enemies around him. He takes additional magic damage in this form, but his restorative powers are amplified.",
+    "necrolyte_heartstopper_aura": "Necrophos stills the hearts of his opponents, causing nearby enemy units to lose a percentage of their max health over time.",
+    "necrolyte_death_seeker": "Necrophos turns into a large Death Pulse towards the target unit's position. Once it arrives to the location, the Death Pulse spreads towards nearby enemies and allies.",
+    "necrolyte_sadist": "Necrophos gains stacking regen for 8 seconds for each unit he kills. Hero kills multiply the effect.",
+    "necrolyte_reapers_scythe": "Stuns the target enemy hero, then deals damage based on how much life it is missing. If Necrophos kills an enemy this way, he'll permanently gain Health and Mana Regen. Any kill under this effect is credited to Necrophos."
+  },
+  "npc_dota_hero_warlock": {
+    "warlock_fatal_bonds": "Binds several visible enemy units together, causing a percentage of the damage dealt to one of them to be felt by the others.",
+    "warlock_shadow_word": "Warlock whispers an incantation, casting a spell on a unit that makes it deal damage to nearby enemy units and heal nearby ally units. Target Unit will also heal or be damaged depending on whether they are ally or enemy.",
+    "warlock_upheaval": "CHANNELED - A powerful slowing and damaging current that grows stronger as it's channeled. Lasts up to 10 seconds. Enemies are slowed for 1 second after leaving the area or the spell ends.",
+    "warlock_eldritch_summoning": "Whenever an enemy unit dies while afflicted by one or more of Warlock's abilities, a minor imp is summoned that lasts for 15 seconds and explodes on death. Imps will automatically seek out nearby units, favoring fatally bonded heroes, and will explode when reaching their prey.",
+    "warlock_rain_of_chaos": "Summons a Golem from the depths, stunning enemies for 0.8 seconds. The Golem lives 60 seconds, takes reduced damage from spells, has increased Slow Resistance, has Permanent Immolation and Flaming Fists on attack."
+  },
+  "npc_dota_hero_beastmaster": {
+    "beastmaster_wild_axes": "Beastmaster sends his axes flying and calls them home again, slicing through enemy units and trees along their path. Each axe can hit an enemy once, and amplifies subsequent damage from Beastmaster and his units.",
+    "beastmaster_call_of_the_wild_boar": "Beastmaster calls forth a Boar to aid in the battlefield. The Boar has a passive poison attack that slows attack and movement speeds.",
+    "beastmaster_call_of_the_wild_hawk": "Beastmaster summons a hawk that circles around Beastmaster and dive-bombs at enemies with a base attack rate of every 4s, damaging and rooting them. Attack rate increases with the Hawk's attack speed. Prioritizes heroes.",
+    "beastmaster_inner_beast": "Untaps the inner fury of Beastmaster and units he controls, passively increasing their attack speed.",
+    "beastmaster_drums_of_slom": "Attacks from Beastmaster or a nearby unit he controls will cause him bang his drum, dealing damage to nearby units and healing Beastmaster and units under his control for a portion of the damage dealt. Every attack decreases the interval between drum hits down to a minimum of 0.5s between hits after 20 attacks. If no attacks are made, the intervals gradually increase.\n\nUsing Primal Roar counts as 10 attacks.",
+    "beastmaster_primal_roar": "Beastmaster lets loose a deafening roar that stuns, and shoves open a path to its target. All units in the path of the roar are damaged, while units shoved aside by the roar have their movement and attack speed slowed. Additionally, Beastmaster and his units gain 40% movement speed for 2 seconds.",
+    "beastmaster_rugged": "Beastmaster's melee hero Damage Block Chance is increased from 50% to 100% versus non-hero units and non-building units."
+  },
+  "npc_dota_hero_queenofpain": {
+    "queenofpain_shadow_strike": "Hurls a poisoned dagger which deals large initial damage, and then deals damage over time. The poisoned unit has its movement speed slowed for 16 seconds. An instance of damage is dealt every 3 seconds.",
+    "queenofpain_blink": "Short distance teleportation that allows Queen of Pain to move in and out of combat.",
+    "queenofpain_scream_of_pain": "The Queen of Pain lets loose a piercing scream around her, damaging nearby enemies.",
+    "queenofpain_succubus": "All sources of Spell Lifesteal also apply to Pure Damage. Queen of Pain gains Spell Lifesteal that increases with proximity to her enemies. Lifesteal is at its maximum when the enemy is 150 units or closer to her and at its minimum when the enemy is 800 units or further from her.",
+    "queenofpain_sonic_wave": "Creates a gigantic wave of sound in front of Queen of Pain, dealing heavy damage to all enemy units in its wake and pushing them back."
+  },
+  "npc_dota_hero_venomancer": {
+    "venomancer_venomous_gale": "Launches a ball of venom in a line, poisoning enemy units so that they take both initial damage and damage over time, as well as suffering slowed movement. Venomous Gale deals damage every 3 seconds over its duration.",
+    "venomancer_poison_sting": "Adds poison damage to Venomancer's normal attacks and slowing movement speed.",
+    "venomancer_plague_ward": "Summons a plague ward to attack enemy units and structures. The ward is immune to magic. Wards gain the Poison Sting level from Venomancer, dealing 50% of the full damage.",
+    "venomancer_sepsis": "Venomancer's attacks deal extra damage based on how many debuffs the attack target has. Extra damage is dealt as magical damage. Only counts debuffs from Venomancer or his Plague Wards.",
+    "venomancer_noxious_plague": "Infects an enemy with a deadly plague that does an initial burst of damage and additional damage over time based on the unit's maximum health. The plague slows the target and nearby enemies based on their distance to the target. When the target dies or the debuff expires, all nearby enemies are infected with a noncommunicable version of the plague."
+  },
+  "npc_dota_hero_faceless_void": {
+    "faceless_void_time_walk": "Rushes to a target location while backtracking any damage taken the last 2 seconds.",
+    "faceless_void_time_dilation": "Faceless Void traps all nearby enemies in a time dilation field for 7 seconds, extending their cooldowns and slowing their movement and attack speed by 4%, amplified by each cooldown extended. Deals bonus damage per second for each cooldown.",
+    "faceless_void_time_lock": "Adds the chance for an attack to lock an enemy unit in time while attacking it a second time.",
+    "faceless_void_time_walk_reverse": "Available for 1.5 seconds after landing Time Walk. If used in this period, you will reverse your time walk back to your previous cast location. Does not affect health or proc scepter hits.",
+    "faceless_void_distortion_field": "Enemy Attack Projectiles within 600 radius are slowed by 35%."
+  },
+  "npc_dota_hero_skeleton_king": {
+    "skeleton_king_hellfire_blast": "Wraith King sears an enemy unit with spectral fire, dealing damage and stunning, then dealing damage over time and slowing the target.",
+    "skeleton_king_mortal_strike": "Wraith King passively deals bonus damage on an attack with a cooldown.",
+    "skeleton_king_vampiric_spirit": "Grants Wraith King Lifesteal. When slain Wraith King turns into a free pathing Wraith with Bonus Attack and Movement Speed for a short duration, delaying his death. Wraith King cannot reincarnate after being a Wraith.",
+    "skeleton_king_reincarnation": "Wraith King's form regroups after death, allowing him to resurrect when killed in battle. Upon death, enemy units in a 600 radius are slowed. Can be self-cast to kill Wraith King instantly."
+  },
+  "npc_dota_hero_death_prophet": {
+    "death_prophet_carrion_swarm": "Sends a swarm of winged beasts to savage enemy units in front of Death Prophet.",
+    "death_prophet_silence": "Fires a projectile that prevents enemy units in a target area from casting spells.",
+    "death_prophet_spirit_siphon": "Creates a spirit link between Death Prophet and an enemy unit, draining health from the enemy.",
+    "death_prophet_exorcism": "Unleashes evil spirits to drain the life of nearby enemy units and structures. Spirits need to return back to Death Prophet in order to attack again. At the end of the spell's duration, Death Prophet is healed in proportion to the damage dealt. Deals 50% damage to buildings. Lasts 40 seconds."
+  },
+  "npc_dota_hero_phantom_assassin": {
+    "phantom_assassin_stifling_dagger": "Throws a dagger slowing the enemy unit's movement speed, dealing 65+30% of Phantom Assassin's attack damage as physical damage and applying attack effects from items and abilities.",
+    "phantom_assassin_phantom_strike": "Teleports to a unit, friendly or enemy, and grants bonus attack speed while attacking if it's an enemy unit.",
+    "phantom_assassin_blur": "Phantom Assassin blurs her body, disjointing incoming projectiles, increasing her movement speed, causing her to be impossible to see until she comes near enemy heroes or towers.",
+    "phantom_assassin_fan_of_knives": "Phantom Assassin releases sharp blades around her, dealing a percentage of each victim's max health on impact and applying Break.",
+    "phantom_assassin_immaterial": "Phantom Assassin focuses inward, increasing her ability to evade enemy attacks. Evasion improves with Phantom Assassin's levels. \n\nStacks diminishingly with other sources of Evasion.",
+    "phantom_assassin_coup_de_grace": "Phantom Assassin refines her combat abilities, acquiring a chance of gaining Deadly Focus with each attack. When attacking with Deadly Focus, Phantom Assassin will consume the buff and guarantee a critical hit. Stifling Dagger has a bonus chance to cause Deadly Focus."
+  },
+  "npc_dota_hero_pugna": {
+    "pugna_nether_blast": "An exploding pulse deals damage to enemies and structures in the area. Deals 65% damage to structures.",
+    "pugna_decrepify": "A powerful banishing spell that slows a unit and renders it unable to attack or be attacked. Healing on affected allies is increased, while afflicted enemies take extra magic damage instead.",
+    "pugna_nether_ward": "Pugna places a Nether Ward at the target location. The ward will fire at any enemy hero who casts a spell dealing base damage plus the damage multiplier of the mana spent by the enemy hero.",
+    "pugna_oblivion_savant": "Pugna can cast spells and use items while channeling.",
+    "pugna_life_drain": "CHANNELED - When cast on an enemy, Pugna drains health from the target enemy unit to heal himself and granting vision over the target.\n\nWhen cast on an ally, Pugna will drain his own health into his ally."
+  },
+  "npc_dota_hero_templar_assassin": {
+    "templar_assassin_refraction": "Templar Assassin becomes highly elusive, gaining a small barrier and bonus to her damage. The damage and avoidance effects are separate, and have a limited number of instances. If a barrier is consumed, a new one is created as long as there are charges left. If an instance of damage would deal more damage than the remaining barrier, all of the damage is absorbed.",
+    "templar_assassin_meld": "Templar Assassin conceals herself, becoming invisible as long as she remains still. If Meld's invisibility is broken by attacking an enemy, Lanaya's attack will deal bonus damage to the enemy and reduce their armor for 6 seconds.",
+    "templar_assassin_psi_blades": "Templar Assassin's psi blades slice through the attacked unit, splitting and damaging enemy units directly behind it, while gaining bonus attack range. For each unit it damages, the split damage is reduced by a percentage.",
+    "templar_assassin_trap": "Springs the trap nearest to Templar Assassin, slowing nearby enemies. \n\nIf the ability is in alt-cast state, springs the trap that is closest to the mouse cursor.",
+    "templar_assassin_trap_teleport": "CHANNELED - Allows Templar Assassin to teleport to any Psionic Trap after channeling for 2 seconds, detonating it upon arrival as if it was fully charged and instantly dealing 400 bonus damage. Channeling Psionic Projection does not break Meld.",
+    "templar_assassin_psionic_trap": "Templar Assassin places mystical traps that invisibly monitor enemy movement. When sprung at her command, they deal a small amount of damage and exert a slowing influence of 20% in a 400 radius. Traps charge up to slow 50% after 3.5 seconds. Deals bonus damage when fully charged.",
+    "templar_assassin_third_eye": "Templar Assassin and her teammates can see Roshan's respawn timer."
+  },
+  "npc_dota_hero_viper": {
+    "viper_poison_attack": "Intensifies Viper's venom, adding an effect to his normal attack that applies a stacking movement speed slow and magic resistance deduction while dealing damage over time. Stacks up to 6 times.",
+    "viper_nethertoxin": "Viper releases a Nethertoxin at the targeted area. Units in that area take an increasing damage over time based on how long they remain in it. Units in it have their attack speed slowed.",
+    "viper_corrosive_skin": "Viper exudes an infectious toxin that damages and slows the attack speed of any enemy that damages it in a 1200 radius. The acid exudate also increases Viper's resistance to magic.",
+    "viper_nose_dive": "Viper slams into the ground, releasing a Nethertoxin and splattering each enemy in a 500 AoE for 4 seconds with the effect of Corrosive Skin.",
+    "viper_viper_strike": "Viper slows the targeted enemy unit's movement and attack speed while also disabling their passives and dealing poison damage over time. The slowing effect reduces over the duration of the poison."
+  },
+  "npc_dota_hero_luna": {
+    "luna_lucent_beam": "Calls a beam of lunar energy down upon an enemy, damaging and briefly stunning them.",
+    "luna_lunar_orbit": "Creates 4 glaives that rotate 225 radius around Luna. Any enemy unit that collides with a glaive will take a percentage of Luna's Attack Damage.",
+    "luna_moon_glaive": "Empowers Luna's glaives, causing her attacks to bounce between enemy units. Deals less damage with each bounce.",
+    "luna_lunar_blessing": "Grants attack damage to Luna and nearby allied heroes, with Luna receiving double the attack damage bonuses. At night, Lunar Blessing is global, and Luna is blessed with additional night vision.",
+    "luna_eclipse": "Showers random nearby enemies with strikes from Luna's current level of Lucent Beam. These beams do not stun their targets, and there is a maximum number of times that a single target can be struck. Also turns day into night for a short time."
+  },
+  "npc_dota_hero_dragon_knight": {
+    "dragon_knight_breathe_fire": "Unleashes a breath of fire in front of Dragon Knight that burns enemies and reduces the damage their attacks deal.",
+    "dragon_knight_dragon_tail": "Dragon Knight smites an enemy unit in melee range with his shield, stunning it and dealing damage. When in Elder Dragon Form, the cast range increases to 450.",
+    "dragon_knight_dragon_blood": "The life blood of the Dragon improves Dragon Knight's attacks. When in Dragon form, these effects are stronger.",
+    "dragon_knight_fireball": "Ignites an area, dealing damage over time that lingers on enemies in it. Has reduced cast range when melee.",
+    "dragon_knight_elder_dragon_form": "Dragon Knight takes the form of one of three powerful elder dragons. Increases movement speed, attack damage, and Wyrm's Wrath effects. Attacks apply Wyrm's Wrath on-hit effects and a percentage of the attack damage to all enemies near the target. Increases Dragon Tail range. Increases health regeneration and armor bonuses from Dragon Blood.",
+    "dragon_knight_inherited_vigor": "The life blood of the Dragon improves Dragon Knight's health regeneration and armor. Amount for both values is increased by 0.5 per level and is multiplied when in Dragon Form."
+  },
+  "npc_dota_hero_dazzle": {
+    "dazzle_poison_touch": "Releases a cone of poison that strikes multiple enemy units. Deals damage over time and slows the targets. Anytime the targets get attacked by Dazzle, the debuff duration is refreshed and slow is increased.",
+    "dazzle_shallow_grave": "An ally blessed with Shallow Grave, no matter how close to death, cannot die while under its protection. Healing on that ally is also amplified for the duration based on the hero's HP.",
+    "dazzle_shadow_wave": "Sends out a bolt of power that arcs between allies, healing them while damaging any enemy units standing nearby. Dazzle is always healed by Shadow Wave.",
+    "dazzle_innate_weave": "Dazzle's abilities apply Weave to both allies and enemies they affect, increasing allied armor and reducing enemy armor. Multiple instances of this effect stack.",
+    "dazzle_nothl_projection": "Dazzle departs his body, traveling through the Nothl Realm as an invulnerable spirit that can cast spells, attack, and use items, leaving his body behind in the world with a visible tether. While active, Dazzle's basic abilities are empowered: Poison Touch hexes enemies, Shallow Grave heals upon expiration, and Shadow Wave has a shorter cooldown. The effect can be ended early, and Dazzle returns to the body at the end.",
+    "dazzle_nothl_projection_end": "Ends Dazzle's sojourn in the Nothl Realm and returns his spirit to his body."
+  },
+  "npc_dota_hero_rattletrap": {
+    "rattletrap_battery_assault": "Discharges high-powered shrapnel at random nearby enemy units, dealing minor magical damage and ministun.",
+    "rattletrap_power_cogs": "Forms a ring of energized cogs around Clockwerk, trapping any units that are near. Enemies outside the trap that touch a cog are knocked back, losing health and mana. Once a cog has delivered a shock, it will power down. Damage is increased by 50% of the mana burned.\n\n Cogs can be destroyed by enemy attacks, but Clockwerk can push them up to 1000 distance away with one hit.",
+    "rattletrap_rocket_flare": "Fires a global range flare that explodes over a given area. Upon impact, enemies in the area take damage and are briefly slowed. Rocket flare provides vision over the impact area for 6 seconds.",
+    "rattletrap_overclocking": "Supercharges Clockwerks abilities: Battery Assault affects all enemies in its range; Clockwerk's attack speed in Power Cogs is increased; Rocket Flares have a reduced cooldown and fire additional rockets to either side of the target; Hookshot stun radius and duration is increased; Jetpack moves faster. Clockwerk's movement and attack speed becomes slowed to a crawl after the duration runs out.",
+    "rattletrap_jetpack": "Clockwerk activates a jetpack, gaining flying movement, flying vision, and bonus movement speed. Clockwerk has a severely-limited turn rate during this time and cannot attack. Jetpack can be toggled on and off for the duration of the buff.",
+    "rattletrap_hookshot": "Fires a grappling device rapidly at the target location. If the hook hits a unit, Clockwerk launches himself into the target, stunning and dealing damage to everyone in a 175 radius around the hit target. Any enemies Clockwerk collides with along the way are damaged and stunned.",
+    "rattletrap_armor_power": "Clockwerk's outgoing damage increases by 0.25% per point of armor.",
+    "rattletrap_jetpack_toggle": "Toggles Jetpack on and off."
+  },
+  "npc_dota_hero_leshrac": {
+    "leshrac_split_earth": "Splits the earth under enemies. Deals damage and stuns for a short duration.",
+    "leshrac_diabolic_edict": "Saturates the area around Leshrac with magical explosions that deal pure damage to enemy units and buildings. The fewer units available to attack, the more damage those units will take.",
+    "leshrac_lightning_storm": "Summons a lightning storm that blasts the target enemy unit, then strikes any nearby enemy units. Struck enemies have their move speed slowed.",
+    "leshrac_greater_lightning_storm": "Causes Leshrac and all nearby enemies to turn ethereal, preventing them from attacking, slowing them, and making them take more magic damage. Increases Leshrac's speed rather than reducing it. Does not cause Leshrac to take amplified damage.",
+    "leshrac_pulse_nova": "Creates waves of damaging energy around Leshrac, one per second, to damage nearby enemy units. Drains Leshrac's mana with each pulse."
+  },
+  "npc_dota_hero_furion": {
+    "furion_sprout": "Sprouts a ring of trees around a unit, damaging and trapping it in place and providing vision in a 250 radius.",
+    "furion_teleportation": "Teleports to any point on the map. Gains a barrier after arriving to its destination.",
+    "furion_force_of_nature": "Converts an area of trees into Treants under the command of Nature's Prophet.",
+    "furion_curse_of_the_forest": "Applies a curse on all enemy heroes within 900 range, displaying them in fog, slowing them, and dealing damage over time based on the number of trees within 250 radius. Treants count as trees for this purpose.",
+    "furion_spirit_of_the_forest": "Nature's Prophet gains 2% bonus damage for each tree within 300 and a multiplier of that same bonus for each treant within 1200 distance of him.",
+    "furion_wrath_of_nature": "Damaging energy bounces around the map, striking enemies that are in vision starting with those closest to the cast point. Each enemy hit beyond the first adds damage, up to the maximum after 16 are hit."
+  },
+  "npc_dota_hero_life_stealer": {
+    "life_stealer_rage": "Launch into a maddened rage, becoming Debuff Immune and increasing magic resistance.\n\nDISPEL TYPE: Basic Dispel",
+    "life_stealer_open_wounds": "Lifestealer rends an enemy unit, slowing the victim's movement speed and allowing all allies to regain health for a percentage of the damage they deal to that unit. The victim recovers movement speed over the duration.",
+    "life_stealer_ghoul_frenzy": "Passively grants Lifestealer Movement and Attack Speed.",
+    "life_stealer_feast": "Lifestealer's attacks deal damage and provide heal for a percentage of his target's max health. Allows Lifestealer to attack allied creeps at 75% health. Lifestealer gains permanent max HP whenever he kills a creep or hero.",
+    "life_stealer_infest": "Lifestealer infests the body of a target unit, becoming undetectable, and healing for a portion of his max hitpoints every second while inside. He can then explode from the host body, dealing damage to nearby enemies. If the infested unit is an enemy creep or a neutral creep, he can take control of the unit's ability to move and attack, and the creep loses a portion of their max hitpoints over time. Does not work on enemy heroes.\n\nDISPEL TYPE: Basic Dispel",
+    "life_stealer_consume": "Lifestealer eats the host body from the inside out, exploding from within."
+  },
+  "npc_dota_hero_dark_seer": {
+    "dark_seer_vacuum": "Dark Seer creates a vacuum over the target area that sucks in enemy units, disrupting them and dealing damage.",
+    "dark_seer_ion_shell": "Surrounds the target unit with a bristling shield that damages enemy units in an area around it.",
+    "dark_seer_surge": "Charges a target friendly unit with power, giving it a brief burst of phased movement speed. Allows the unit to reach maximum movement speed and cannot be slowed.",
+    "dark_seer_normal_punch": "Passive ability. Causes Dark Seer's next attack on a hero to have True Strike, knock a replica out of the victim, damaging and stunning them based on how far Dark Seer has moved in the past 3 seconds. Max power is reached after 1100 distance moved.",
+    "dark_seer_aggrandize": "When Dark Seer levels up, he restores a percentage of his max health and mana. Restore percentage is equal to 10% + 1.5% per hero level.",
+    "dark_seer_wall_of_replica": "Raises a wall of warping light that slows, damages, and creates replicas of any enemy hero who crosses it. Enemy replicas serve at the Dark Seer's will. Replicas last until they are destroyed, or until the wall's duration ends."
+  },
+  "npc_dota_hero_clinkz": {
+    "clinkz_strafe": "Clinkz gains attack speed and has bonus attack range. Any current Skeleton Archers within a 1200 radius of Clinkz also gain bonus attack range and 50% of the attack speed bonus. \n\n Casting Strafe does not break Skeleton Walk invisibility.",
+    "clinkz_searing_arrows": "Imbues Clinkz's arrows with fire for extra damage.\n\nSkeleton Archers will fire Searing Arrows at targets Clinkz attacks for 50% damage.",
+    "clinkz_death_pact": "Clinkz consumes the target enemy creep or friendly Skeleton Archer, healing and gaining max health. Does not take Clinkz out of Skeleton Walk.",
+    "clinkz_burning_barrage": "CHANNELED - Clinkz channels and shoots multiple piercing arrows in the target direction that hit all enemy units dealing a percentage of Clinkz' attack damage and applying attack modifiers.",
+    "clinkz_burning_army": "Summons a row of Burning Skeleton Archers in the target location.",
+    "clinkz_wind_walk": "Clinkz moves invisibly through units until the moment he attacks or uses items. Leaving Skeleton Walk creates Skeleton Archers.\n\nSkeleton Archers are immobile and die within multiple attacks from a hero or tower. Skeleton Archers deal a percentage of Clinkz' damage, and deal 25% less damage to buildings. Attack range is equal to Clinkz' attack range.",
+    "clinkz_infernal_shred": "Clinkz and his skeletons apply a stacking debuff that causes their attacks to pierce up to 20% of the target's total physical armor (does not reduce their armor). Clinkz applies 2% per attack, and skeletons apply 1%. \n\nLasts 5 seconds."
+  },
+  "npc_dota_hero_omniknight": {
+    "omniknight_purification": "Instantly heals a friendly unit and damages all nearby enemy units.",
+    "omniknight_martyr": "Grants Debuff Immunity with 60% magic resistance to the target, as well as bonus Strength and HP Regen based on the amount of Debuffs on them.",
+    "omniknight_hammer_of_purity": "Omniknight imbues his hammer with holy power, causing his attack to have increased range, deal pure damage based on a percentage of his base damage and slow his target for a short duration.",
+    "omniknight_degen_aura": "Degenerates the movement capabilities of enemy units that stray too near.",
+    "omniknight_guardian_angel": "Omniknight calls upon a Guardian Angel that grants immunity from physical damage to allied units in an area."
+  },
+  "npc_dota_hero_enchantress": {
+    "enchantress_impetus": "Places an enchantment on each attack while activated, causing it to deal additional damage based on how far away the target is. The farther the target, the greater the damage dealt. Deals double damage to illusions.",
+    "enchantress_enchant": "Enchantress charms an enemy. If the enemy is a hero, they are dispelled and slowed for 3.5s.\n\n If the enemy is a creep, she brings it under her control and receives 40% of their experience bounty. Enchantress can control creeps for up to 30s. \n\nDISPEL TYPE: Basic Dispel",
+    "enchantress_natures_attendants": "A cloud of wisps heals Enchantress and any friendly units nearby.",
+    "enchantress_bunny_hop": "Leaps backward, dodges incoming projectiles, and launches an Impetus attack on the 2 furthest enemy units within Enchantress' attack range + 100.",
+    "enchantress_little_friends": "Enchantress roots an enemy unit. All creeps, ally, enemy and neutral within a radius will gain bonus movement and attack speed and attack the chosen target for 6 seconds.",
+    "enchantress_untouchable": "Enchantress beguiles her enemies, slowing their attacks when she is attacked.",
+    "enchantress_rabblerouser": "All neutral camps and Creeps under Enchantress' control deal more damage to enemy heroes."
+  },
+  "npc_dota_hero_huskar": {
+    "huskar_inner_fire": "In a fiery rage, knocks all nearby enemies away from you to a fixed distance, dealing damage and silencing them.",
+    "huskar_burning_spear": "Huskar sets his spears aflame, dealing damage over time with his regular attack. Multiple attacks will stack additional damage. Each attack drains some of Huskar's health.",
+    "huskar_berserkers_blood": "Huskar's injuries feed his power, giving increased attack speed, magic resistance and health regen based on missing health. Health regen is a percentage of your strength.",
+    "huskar_blood_magic": "Huskar does not have mana. Mana costs of items are converted into health costs.Huskar's Health Costs are Magical Damage and can be reduced by Magic Resist.",
+    "huskar_life_break": "Huskar draws upon his health to break an enemy's life, leaping at a target to shatter a percentage of that hero's current health and slow both their movement and attack speed. While leaping, Huskar is Debuff Immune and has 60% increased magic resistance.\n\nDISPEL TYPE: Basic Dispel"
+  },
+  "npc_dota_hero_night_stalker": {
+    "night_stalker_void": "Creates a damaging void that slows an enemy unit and deals damage. At night, Void also mini-stuns, interrupting channeling abilities, and its effects lasts longer.",
+    "night_stalker_crippling_fear": "Night Stalker horrifies all nearby enemies, causing them to become silenced and take damage over time while near him. The effect lasts longer at night.",
+    "night_stalker_hunter_in_the_night": "Night Stalker is in his element at night, attacking and moving with great swiftness.",
+    "night_stalker_darkness": "Night Stalker smothers the sun and summons instant darkness, so that he might use his powers at their fullest. Night Stalker gains flight and bonus damage during this time. Has unobstructed vision.",
+    "night_stalker_heart_of_darkness": "During the night, Night Stalker's health regeneration is increased by 20%."
+  },
+  "npc_dota_hero_broodmother": {
+    "broodmother_insatiable_hunger": "A violent lust for vital fluids increases Broodmother's attack damage and gives her a vampiric attack.",
+    "broodmother_spin_web": "Spins a large web that grants Broodmother a passive movement speed increase and increases her Turn Rate, while in its vicinity, as well as giving free movement.\n\nSpin Web can be cast from anywhere as long as the new web touches an existing web. Webs never expire, and can be manually destroyed. When the maximum limit of webs is exceeded, the oldest web disappears.",
+    "broodmother_incapacitating_bite": "Broodmother's venom cripples enemy units, causing her attacks to slow and giving the affected unit a chance to miss its attacks and extra damage from attacks.",
+    "broodmother_spiders_milk": "Whenever Broodmother kills a unit, she and all units under her control in a 600 radius receive a buff that heals them for a percentage of the victims health every 0.5 seconds. Healing from creeps is reduced by 40%.",
+    "broodmother_spawn_spiderlings": "Broodmother injects her young into an enemy unit, dealing damage and slowing them for 4 seconds. The spiderlings will hatch if the target is killed while under this influence."
+  },
+  "npc_dota_hero_bounty_hunter": {
+    "bounty_hunter_shuriken_toss": "Hurls a deadly shuriken at an enemy unit, dealing damage and slowing the target's Movement Speed by 100% for 0.35s. The shuriken will bounce to any Tracked units who are within a 1200 radius of each other.",
+    "bounty_hunter_jinada": "Bounty Hunter plans his next hit, dealing bonus damage and stealing some unreliable gold.",
+    "bounty_hunter_wind_walk": "Bounty Hunter becomes invisible and gains the ability to move through other units until he attacks or uses an ability. If he breaks the invisibility with an attack, that attack will stun the target for a short duration.",
+    "bounty_hunter_wind_walk_ally": "Applies Shadow Walk and all of its bonuses to the target ally. Allied fade time is 0.5s. Does not break Bounty Hunter's invisibility when cast.",
+    "bounty_hunter_big_game_hunter": "When getting a kill or assist on an enemy that has a killing streak, Bounty Hunter receives 20% extra gold.",
+    "bounty_hunter_track": "Tracks an enemy hero, granting True Sight of the target, increasing the damage they take and providing information on how much gold it is carrying. Bounty Hunter moves fast when near the tracked unit. If the target dies, Bounty Hunter and nearby heroes collect a bonus bounty of gold. Casting Track does not take you out of invisibility."
+  },
+  "npc_dota_hero_weaver": {
+    "weaver_the_swarm": "Weaver launches a swarm of 12 young Weavers that latch on any enemy unit in their path, attacking and reducing armor until it is killed.",
+    "weaver_shukuchi": "Weaver shifts out of visibility, gaining max movement speed --doing harm to any enemies it passes through.",
+    "weaver_geminate_attack": "Allows Weaver to dispatch two attacks at once.",
+    "weaver_time_lapse": "Weaver warps backward to whatever position it was in five seconds earlier--regaining the HP and mana from that time. No effect on cooldown, gold or experience.\n\nDISPEL TYPE: Strong Dispel",
+    "weaver_rewoven": "Every time Weaver casts an ability, he gains 50 attack range for 7s. This effect stacks independently."
+  },
+  "npc_dota_hero_jakiro": {
+    "jakiro_dual_breath": "An icy blast followed by a wave of fire launches out in a path in front of Jakiro. The ice slows enemies, while the fire delivers damage over time.",
+    "jakiro_ice_path": "Creates a path of ice that stuns and damages enemies that touch it.",
+    "jakiro_liquid_fire": "Jakiro burns his enemies in an area of effect with fire added to his attack, while slowing their attacks. Shares a cooldown with Liquid Frost.",
+    "jakiro_liquid_ice": "Jakiro chill his enemies with ice added to his attack, slowing movement for 5 seconds and increasing damage taken from Jakiro's attacks and abilities. This effect does not apply to buildings. Shares a cooldown with Liquid Fire.",
+    "jakiro_double_trouble": "Jakiro's attacks launch an attack from each head, but deal less damage each.",
+    "jakiro_macropyre": "Jakiro exhales a wide line of lasting flames, which deals damage per second to any enemy units caught in the fire."
+  },
+  "npc_dota_hero_batrider": {
+    "batrider_sticky_napalm": "Drenches an area in sticky oil, amplifying damage from Batrider's attacks and abilities and slowing the movement speed and turn rate of enemies. Additional casts of Sticky Napalm continue to increase damage, up to 20 stacks. Applies a small amount of damage with each cast.",
+    "batrider_flamebreak": "Hurls an explosive cocktail that explodes when it reaches the target location, knocking back, slowing and dealing damage over time to enemies in the area.",
+    "batrider_firefly": "Batrider takes to the skies, laying down a trail of flames from the air. The fire damages any enemies it touches, and destroys trees below Batrider.",
+    "batrider_smoldering_resin": "Batrider's attacks apply a debuff that deals 20% of the attack damage every 1s for 2s.",
+    "batrider_flaming_lasso": "Lassoes an enemy and drags them in Batrider's wake. Dragged units cannot move, attack, or use abilities. Teleporting or blinking will break the lasso."
+  },
+  "npc_dota_hero_chen": {
+    "chen_penitence": "Damages enemy unit, forces it to move slower and lets allies attack it more quickly.",
+    "chen_holy_persuasion": "Chen takes control of an enemy or neutral creep and receives a percentage of its bounty. Its maximum health is set to 400 + 50 per Chen Level. Converted creeps will have increased movement speed and bonus damage.",
+    "chen_divine_favor": "Passively provides an aura that grants increased health regeneration. Can be cast on allies to provide them with bonus armor and increasing the healing and health regeneration they receive.\n\nIf cast on Chen, all units controlled by Chen receive the buff and will be teleported to him. Taking damage from enemy heroes or their units will cancel the teleport.",
+    "chen_summon_convert": "Chen summons a convert to fight for him. The convert gains bonuses from Holy Persuasion and dies if Chen dies. Its maximum health is set to 220 + 80 per Chen Level.\n\n The spell stays on cooldown while the convert is alive, but refreshes whenever Chen respawns. The Convert counts towards Holy Persuasion max unit count. The Convert's ability level increases with Chen's level of Holy Persuasion.",
+    "chen_hand_of_god": "Heals all allied heroes on the map as well as all units under Chen's control. A large heal is applied at first and a slow heal over time is applied for 10 seconds afterwards."
+  },
+  "npc_dota_hero_spectre": {
+    "spectre_spectral_dagger": "Spectre flings a dagger to draw a Shadow Path, dealing damage and slowing the movement speed of any enemies along the trail. Units hit by the dagger also trail a Shadow Path. While treading the path, Spectre moves faster and phases through otherwise impassable terrain.",
+    "spectre_shadow_step": "Thrusts an uncontrollable illusion at the target. The illusion receives 200% damage.\n\nThe Reality sub-ability may be used to teleport to the illusion, destroying it.",
+    "spectre_dispersion": "Damage done to Spectre is reflected on her enemies, leaving her unharmed. The effect lessens with distance.",
+    "spectre_reality": "Spectre assumes the target Shadow Step or Haunt illusion, destroying it.",
+    "spectre_desolate": "Spectre and her illusions deal bonus Pure damage if attacking an enemy that does not have any allied units within a 350 radius around them.",
+    "spectre_haunt": "Creates a spectral nemesis to haunt all enemy Heroes.\n\nHaunt illusions are uncontrollable, take extra damage, and deal less damage than Spectre herself. They ignore terrain.\n\nThe Reality sub-ability may be used to teleport to the illusion, destroying it."
+  },
+  "npc_dota_hero_doom_bringer": {
+    "doom_bringer_devour": "Consumes an enemy or neutral creep, acquiring any special abilities that it possessed. If alt-cast is deactivated, Doom will not acquire the creep's abilities. Duration is equal to the cooldown.",
+    "doom_bringer_scorched_earth": "Carpets the nearby earth in flames which damage enemies, while also granting him increased movement speed.",
+    "doom_bringer_infernal_blade": "Doom swings his burning sword, igniting the enemy. Stuns for 0.6 seconds and applies a 4 second burn that deals a base damage plus a percentage of the target's Max HP as damage per second.",
+    "doom_bringer_empty1": "This slot will be replaced with abilities acquired using Devour.",
+    "doom_bringer_empty2": "This slot will be replaced with abilities acquired using Devour.",
+    "doom_bringer_doom": "Inflicts a curse that dispels an enemy and prevents them from casting spells or healing in any way, while taking damage over time.\n\nDISPEL TYPE: Basic Dispel",
+    "doom_bringer_lvl_pain": "Doom's attacks deal 25% bonus damage to heroes whose level is lower than Doom's level."
+  },
+  "npc_dota_hero_ancient_apparition": {
+    "ancient_apparition_cold_feet": "Places Death Rime Stacks on an enemy that can be dispelled by moving away from the initial cast point. If the enemy unit doesn't move outside of the given range, it will be stunned and frozen in place after 4 seconds.",
+    "ancient_apparition_ice_vortex": "Creates a vortex of icy energy that applies Death Rime Stacks and increases magic damage done to enemies in its range.",
+    "ancient_apparition_chilling_touch": "Enhances Ancient Apparition's attack with increased range and heavy magic damage. Applies a Death Rime Stack that lasts for 3 seconds. Additionally applies a 100% slow for 0.7 seconds.",
+    "ancient_apparition_death_rime": "Ancient Apparition's abilities apply Death Rime Stacks on enemies. Death Rime slows enemies' movement speed and deals damage over time.",
+    "ancient_apparition_ice_blast": "Launches a tracer toward any location on the battlefield, which must be triggered again to mark the area to be blasted by a damaging explosion of hail. The further the tracer travels, the larger the explosion will be. Enemies caught in the explosion, or who touch the icy ball of hail as it travels, are Frostbitten, gaining Death Rime Stacks and prevented from regenerating or healing. If a Frostbitten unit's health drops below a certain percentage, they will instantly shatter.",
+    "ancient_apparition_ice_blast_release": "Releases the ice blast to explode at the tracer's current location. Can be cast while silenced."
+  },
+  "npc_dota_hero_ursa": {
+    "ursa_earthshock": "Ursa leaps forward 250 units and slams the earth, causing a powerful shock to damage and slow all enemy units in a nearby area for 4 seconds.",
+    "ursa_overpower": "Using his skill in combat, Ursa gains increased attack speed and slow resistance for a number of subsequent attacks.",
+    "ursa_fury_swipes": "Ursa's claws dig deeper wounds in the enemy, causing consecutive attacks to the same enemy to deal more damage. If the same target is not attacked after 8 seconds, the bonus damage is lost.",
+    "ursa_maul": "Ursa gains bonus damage equal to a percentage of his Current HP.",
+    "ursa_enrage": "Ursa goes into a frenzy, providing damage reduction and status resistance. Removes any existing debuffs.\n\nDISPEL TYPE: Strong Dispel"
+  },
+  "npc_dota_hero_spirit_breaker": {
+    "spirit_breaker_charge_of_darkness": "Spirit Breaker fixes his sight on an enemy unit and starts charging through all objects, starting at 25% of the bonus speed and reaching his max speed after 1.5s.\n\nAll enemy units passed through and the targeted unit will be hit by a Greater Bash. If the targeted unit dies, Spirit Breaker will change his target to the nearest enemy unit to that location.",
+    "spirit_breaker_bulldoze": "Spirit Breaker gains movement speed and status resistance to ram through enemies. Can be used while charging.",
+    "spirit_breaker_greater_bash": "Gives a chance to stun and knockback an enemy unit on an attack. Deals a percentage of movement speed as damage.",
+    "spirit_breaker_planar_pocket": "Barathrum gains magic resistance and distorts reality around the selected hero, making any unit-targeted spells cast by enemy heroes get redirected towards Spirit Breaker. Can be cast on both allied and enemy heroes, but only spells cast by enemies of Spirit Breaker will be redirected.",
+    "spirit_breaker_herd_mentality": "The hero on your team whose level is lower than anybody else's on your team gains 50% more experience.",
+    "spirit_breaker_nether_strike": "Spirit Breaker slips into the nether realm, reappearing next to his hapless victim. Upon reappearing, a Greater Bash of the current level occurs and deals bonus damage. Knocks back for double the normal distance."
+  },
+  "npc_dota_hero_gyrocopter": {
+    "gyrocopter_rocket_barrage": "Launches a salvo of rockets at nearby enemy units in a radius around the Gyrocopter. Lasts 3 seconds.",
+    "gyrocopter_homing_missile": "Fires a homing missile to seek the targeted enemy unit. The missile gains speed over time, dealing damage and stunning when it impacts the target. Enemy units can destroy the missile before it reaches its target.",
+    "gyrocopter_flak_cannon": "Gyrocopter's attacks hit all enemy units in an area around it for a limited number of attacks. Only the main target of attacks will receive attack bonuses such as Critical Strike. Lasts 12 seconds or until the attacks are used.",
+    "gyrocopter_chop_shop": "Gyrocopter can disassemble most items.",
+    "gyrocopter_call_down": "Call down 3 aerial missile strikes that slow and damage enemy units in a target area. Each strike is 500 distance from the previous one."
+  },
+  "npc_dota_hero_alchemist": {
+    "alchemist_acid_spray": "Sprays high-pressure acid across a target area. Enemy units who step across the contaminated terrain take damage per second and have their armor reduced.",
+    "alchemist_unstable_concoction": "Alchemist brews up an unstable concoction that he can throw at an enemy hero, to stun and deal damage in an area around the explosion. The longer the concoction brews, the more damage it deals and the longer the stun. Alchemist is faster while charging the concoction. After 5 seconds, the brew reaches its maximum damage and stun time. However, after 5.5 seconds, the concoction will explode on Alchemist himself if not thrown.",
+    "alchemist_corrosive_weaponry": "Alchemist coats his weapons and empowers his spells with an acid that applies a stacking slow and base attack damage reduction to enemies hit.\n\nAttacks apply 2 stacks. Unstable Concoction applies 1 stack per second of brew time.",
+    "alchemist_berserk_potion": "Alchemist throws a potion at an ally, applying a basic dispel and giving them attack speed, movement speed and HP regen.\n\nDISPEL TYPE: Basic Dispel",
+    "alchemist_goblins_greed": "Alchemist synthesizes additional gold from his enemies and bounty runes. With each kill, Alchemist earns base bonus gold and extra bonus gold. If Alchemist kills another unit which yields gold within the next 40 seconds, an additional instance of Extra Bonus Gold is added to the total. Additionally, causes bounty runes to yield more gold.",
+    "alchemist_chemical_rage": "Alchemist causes his Ogre to enter a chemically induced rage, reducing base attack cooldown and increasing movement speed and health regeneration.\n\nDISPEL TYPE: Basic Dispel",
+    "alchemist_unstable_concoction_throw": "Throw it before it blows up!"
+  },
+  "npc_dota_hero_invoker": {
+    "invoker_quas": "Allows manipulation of ice elements. Active Quas instances imbue Invoker with bonus hp regeneration. Passively grants bonus strength per level of Quas.",
+    "invoker_wex": "Allows manipulation of storm elements. Active Wex instances imbue Invoker with bonus movement and attack speed. Passively grants bonus agility per level of Wex.",
+    "invoker_exort": "Allows manipulation of fire elements. Active Exort instances imbue Invoker with bonus attack damage. Passively grants bonus intelligence per level of Exort.",
+    "invoker_empty1": "Casting Invoke will replace this slot with one of ten unique spells based on Invoker's currently active Quas, Wex, and Exort buffs.",
+    "invoker_empty2": "Casting Invoke will replace this slot with one of ten unique spells based on Invoker's currently active Quas, Wex, and Exort buffs.",
+    "invoker_invoke": "Combines the properties of the elements currently being manipulated to create a new spell for Invoker to use. Invoke cooldown is reduced by 0.3 seconds for each orb level. \n\n Click the help button to see the list of possible spells.",
+    "invoker_cold_snap": "Invoker draws the heat from an enemy, chilling them to their very core for a duration based on the level of Quas. The enemy will take damage and be briefly frozen. Further damage taken in this state will freeze the enemy again, dealing bonus damage. The enemy can only be frozen so often, but the freeze cooldown decreases based on the level of Quas.",
+    "invoker_ghost_walk": "Invoker manipulates the ice and electrical energies around him, rendering his body invisible and gaining health and mana regen. The elemental imbalance created as a consequence slows nearby enemies based on the level of Quas, and slows Invoker as well based on the level of Wex.",
+    "invoker_tornado": "Unleashes a fast moving tornado that picks up enemy units in its path, suspending them helplessly in the air shortly before allowing them to plummet to their doom. Travels further based on the level of Wex. Holds enemies in the air for a duration based on the level of Quas. Deals base damage plus added damage based on levels in Wex.\n\nDISPEL TYPE: Basic Dispel",
+    "invoker_emp": "Invoker builds up a charge of electromagnetic energy at a targeted location which automatically detonates after 2.9 seconds. The detonation covers an area, draining mana based on the level of Wex. Deals damage for each point of mana drained. If EMP drains mana from an enemy hero, Invoker gains 25% of the mana drained.",
+    "invoker_alacrity": "Invoker infuses an ally with an immense surge of energy, increasing their attack speed based on the level of Wex and their damage based on the level of Exort.",
+    "invoker_chaos_meteor": "Invoker pulls a flaming meteor from space onto the targeted location. Upon landing, the meteor rolls forward, constantly dealing damage based on the level of Exort, and rolling further based on the level of Wex. Units hit by the meteor will also be set on fire for a short time, receiving additional damage based on the level of Exort.",
+    "invoker_sun_strike": "Sends a catastrophic ray of fierce energy from the sun at any targeted location, incinerating all enemies standing beneath it once it reaches the earth. Deals damage based on the level of Exort, however this damage is spread evenly over all enemies hit.",
+    "invoker_forge_spirit": "Invoker forges a spirit embodying the strength of fire and fortitude of ice. Damage and armor are based on the level of Exort while attack range, health, and duration are based on the level of Quas. The elemental's scorching attack is capable of melting the armor of enemy heroes. The number of spirits spawned is determined by the lower level of Quas and Exort.",
+    "invoker_ice_wall": "Generates a wall of solid ice directly in front of Invoker for a duration based on the level of Quas. The bitter cold emanating from it greatly slows nearby enemies based on the level of Quas and deals damage each second based on the level of Exort.",
+    "invoker_deafening_blast": "Invoker unleashes a mighty sonic wave in front of him, dealing damage to any enemy unit it collides with based on the level of Exort. The sheer impact from the blast is enough to knock those enemy units back for a duration based on the level of Quas, then disarm their attacks for a duration based on the level of Wex."
+  },
+  "npc_dota_hero_silencer": {
+    "silencer_curse_of_the_silent": "Curses the target area, dealing damage and causing enemy heroes to take damage over time and slowing their movement speed. Silenced enemies take 1.25x slow and damage. Anytime affected enemies cast a spell, the duration is increased. The duration is paused as long as the target is silenced.",
+    "silencer_glaives_of_wisdom": "Silencer enchants his glaives with his wisdom, stealing his target's Intelligence with each hit and dealing additional damage based on his Intelligence.",
+    "silencer_last_word": "Enchants a target, providing vision of them and causing them to be damaged and silenced if they cast a spell or if the enchantment timer expires. Deals extra damage based on the difference in intelligence between Silencer and the target.",
+    "silencer_brain_drain": "If Silencer kills an enemy hero, he permanently steals Intelligence.",
+    "silencer_global_silence": "Silencer stops all sound, preventing enemy heroes and units on the map from casting spells."
+  },
+  "npc_dota_hero_obsidian_destroyer": {
+    "obsidian_destroyer_arcane_orb": "Adds extra pure damage to Outworld Destroyer's attacks, based on his remaining mana pool.",
+    "obsidian_destroyer_astral_imprisonment": "Places a target unit into an astral prison. The hidden unit is invulnerable and disabled. When the astral prison implodes, it deals damage to the target and steals a percentage of their max mana.",
+    "obsidian_destroyer_equilibrium": "Passively grants a chance to restore a percentage of your max mana each time you cast an ability.",
+    "obsidian_destroyer_ominous_discernment": "Outworld Destroyer gains an additional 2.5 mana per point of Intelligence.",
+    "obsidian_destroyer_sanity_eclipse": "Unleashes a psychic blast that deals damage to enemies based on the difference between your mana and the target's mana. Sanity's Eclipse can hit units trapped by Astral Imprisonment. Deals bonus damage to illusions."
+  },
+  "npc_dota_hero_lycan": {
+    "lycan_summon_wolves": "Summons 2 wolves to aid Lycan in battle. At level 3, wolves gain Permanent Invisibility, and at level 4 wolves gain Cripple that gives 20% chance to cripple the target, causing 8 damage per second and lose 60 attack speed for 4 seconds.",
+    "lycan_howl": "Strikes fear into enemies, reducing armor and attack damage of all enemies within 2000 range of Lycan and his wolves. At night, Howl's armor and attack damage reductions are global.",
+    "lycan_feral_impulse": "Increases the HP regeneration and damage of Lycan and all units under his control.",
+    "lycan_wolf_bite": "Lycan bites an allied hero or creep-hero, granting them Shapeshift properties. Lycan and the bitten target gain 40% Lifesteal and share the healing effect of Lifesteal with each other as long as they are within 1200 range of each other.",
+    "lycan_apex_predator": "Lycan and units he controls deal 2% extra damage to neutral creeps per hero level.",
+    "lycan_shapeshift": "Lycan assumes his lupine form, granting him critical strikes and added vision at night. During Shapeshift, Lycan moves at increased speed and cannot be slowed."
+  },
+  "npc_dota_hero_brewmaster": {
+    "brewmaster_thunder_clap": "Slams the ground, dealing damage and slowing the movement speed and attack rate of nearby enemy units.",
+    "brewmaster_cinder_brew": "Rolls a barrel of ale at enemies that damages enemies along its path and spills out at the target location.\n\nAny enemy in the path or the spill area is drenched in cinder brew, becoming slowed. If the enemy receives Magic or Pure damage, they will be ignited, extending the duration by 3s and causing them to take damage over time.",
+    "brewmaster_drunken_brawler": "Brewmaster can switch stances based on the elements he controls.\n\nWhenever Brewmaster casts an ability, he becomes Brewed Up, increasing his stance power by 150% for 5s. If he casts another ability while Brewed Up, the duration is extended by 1s. After Brewed Up expires, he is hungover and cannot Brew Up again for 9s.\n\nEarth Brawler gains bonus Magic Resistance and Armor.\n\nStorm Brawler gains bonus Evasion and Movement Speed.\n\nFire Brawler gains bonus Attack Speed and chance to critical strike.",
+    "brewmaster_liquid_courage": "When Brewmaster drops below 50% Health he gains a Status Resistance buff and his movement speed alternates every 1s between being faster and being slower. The effect becomes stronger at lower health, scaling from 0 up to max values at 20% Health.",
+    "brewmaster_primal_split": "Splits Brewmaster into elements, forming 3 specialized warriors, adept at survival, each with their own abilities. If any of them survive until the end of their summoned timer, the Brewmaster is reborn. Each Warrior gains its respective Drunken Brawler stance."
+  },
+  "npc_dota_hero_shadow_demon": {
+    "shadow_demon_disruption": "Banishes the targeted unit from the battlefield for a short duration. Upon returning, two illusions of the banished unit with bonus base damage are created under Shadow Demon's control.",
+    "shadow_demon_disseminate": "Whenever the target takes damage, all enemies, including the target itself if it is an enemy, within 675 range of the target also receive a portion of that damage. Can target enemy and allied units. Effect is paused if the target is hidden by Disruption.",
+    "shadow_demon_shadow_poison": "Deals damage in a line, and afflicts enemy units with a poison effect. The poison deals 1/2/4/8/16 times the stack damage based on the number of stacks on the target, up to 5 stacks. Additional stacks cause 50 damage each. This deferred damage is dealt when Shadow Poison's duration is expired, or the Release sub-ability is used.",
+    "shadow_demon_shadow_poison_release": "Releases the poison to do damage on all affected enemies. Units under the effect of Disruption can still be affected by Shadow Poison.",
+    "shadow_demon_demonic_cleanse": "Cleanses the target allied unit, removing negative buffs for the duration. At the end of the duration, the unit is healed. Units under the effect of Disruption can still be affected by Demonic Cleanse.\n\nDISPEL TYPE: Basic Dispel",
+    "shadow_demon_demonic_purge": "Purges the target enemy unit, removing positive buffs, and slowing the target for the duration. The unit slowly regains its speed until the end of the duration, upon which damage is dealt. Units under the effect of Disruption can still be affected by Demonic Purge.\n\nDISPEL TYPE: Basic Dispel",
+    "shadow_demon_menace": "Shadow Demon's Attacks apply a stacking 2.5% Amplify Damage debuff to the enemy for 8 seconds."
+  },
+  "npc_dota_hero_lone_druid": {
+    "lone_druid_entangle": "Allows Lone Druid to Entangle enemies once they gain 5 stacks. Entangled enemies are rooted and take damage over time.\n\nWhen cast, applies 2 stacks to each enemy hero in the area and 5 stacks to enemy creeps. Also empowers Lone Druid for 10s, making him apply 1 stack with each attack on enemy heroes. Enemies cannot gain stacks while Entangled.\n\nLeveling this ability also levels Spirit Bear's Entangling Claws ability.",
+    "lone_druid_spirit_link": "Links Lone Druid and the Spirit Bear, increasing their movement speed as well as sharing a percentage of their lifesteal with each other.",
+    "lone_druid_savage_roar": "Lone Druid and the Spirit Bear roar fiercely causing nearby enemies to flee towards their base in terror. Their movement speed is increased by 20%.",
+    "lone_druid_spirit_bear": "Summons a powerful Spirit Bear companion that can equip items.\n\nIf the bear moves 1100 distance away from the Lone Druid, it cannot attack. Lone Druid suffers 20% of his max health as backlash damage if the Spirit Bear dies.\nSpirit Bear has Demolish, Return, Entangling Claws, Savage Roar, and Spirit Link abilities.",
+    "lone_druid_true_form": "Lone Druid morphs himself into a raging bear, losing his ranged advantage, but gaining bonus armor, bonus health, and bonus attack damage."
+  },
+  "npc_dota_hero_chaos_knight": {
+    "chaos_knight_chaos_bolt": "Throws a mysterious bolt of energy at the target unit. It stuns for a random duration and deals random damage.",
+    "chaos_knight_reality_rift": "Teleports Chaos Knight, any illusions he has, and the target unit to a point along the line between him and the target. Reduces armor of the enemy unit for 6 seconds.",
+    "chaos_knight_chaos_strike": "Chaos Knight and his illusions' attacks have a chance to deal a critical strike of varying strength with bonus lifesteal. Lifesteal from creeps is reduced.",
+    "chaos_knight_reins_of_chaos": "Whenever illusions of Chaos Knight are created, there is a 50% chance that an additional 1 extra illusion will spawn.",
+    "chaos_knight_phantasm": "Summons several phantasmal copies of the Chaos Knight from alternate dimensions. The phantasms are illusions that deal 100% damage, but take 350% damage.\nDISPEL TYPE: Basic Dispel"
+  },
+  "npc_dota_hero_meepo": {
+    "meepo_earthbind": "Tosses a net at the target point, rooting down all enemy units in an area around it.",
+    "meepo_poof": "Drawing mystical energies from the earth, a Meepo can teleport to another Meepo or itself after channeling for 1.5 seconds, damaging the enemy in both the departure and arrival locations. \n\nIf the ability is in alt-cast state, all Meepos will also cast Poof to the target. When cast on the ground, all Meepos except the selected one will Poof to the closest location.",
+    "meepo_ransack": "Steals health from the enemy with each strike and heals all other Meepos for that amount.",
+    "meepo_petrify": "Digs into the ground for a short duration, dispelling Meepo and causing him to become invulnerable and untargetable for 3s. Restores 25% of his max health over that duration.\n\nDISPEL TYPE: Basic Dispel",
+    "meepo_megameepo": "Primary Meepo mounts all other Meepos in a 600 radius around him on top of his shoulders. While in this form, he gains 40% of the other Meepo stats and can Fling them at enemies, dealing damage and slowing them.\n\n When cast, Earthbind generates additional nets and Poof deals bonus damage based on the amount of Meepos riding on top.",
+    "meepo_divided_we_stand": "Meepo summons an imperfect, semi-autonomous duplicate of himself, which can gain gold and experience as he does and shares his experience, attributes and abilities. However, the clones cannot wield any items but the boots that Meepo himself wears. If any of the clones die, they all die. Divided We Stand grants all Meepos bonus Magic Resistance.",
+    "meepo_sticky_fingers": "Has an extra choice of neutral item to select from."
+  },
+  "npc_dota_hero_treant": {
+    "treant_natures_grasp": "Creates vines towards the target location. Vines slow down and deal damage to enemies that walk through. Does 35% less damage to creeps.",
+    "treant_leech_seed": "Treant's attack plants a life-sapping seed in an enemy unit, dealing additional magic damage. The unit is then bound for a short duration and emits 2 healing pulses to up to 5 nearby allies of Treant Protector based on a flat amount and the damage dealt by the attack.",
+    "treant_living_armor": "Infuses the target hero or structure with a protective coating which heals the target and blocks damage from player-controlled sources. Each time this spell blocks damage, the block amount is decreased. If the damage block is decreased to 0, the buff is removed early.",
+    "treant_eyes_in_the_forest": "Treant Protector enchants a tree, which grants him unobstructed vision in that location. The eyes last for 300 seconds and are invisible, but are destroyed if their host tree is destroyed or if they are attacked directly.",
+    "treant_natures_guise": "Grants bonus movement speed when near trees. Treant Protector additionally has Tree Walking if he has not taken damage for 2.75 seconds. While Tree Walking, Nature's Guise can be activated to grant Treant invisibility until he attacks or is no longer near a tree.",
+    "treant_overgrowth": "Summons an overgrowth of vines and branches around Treant that deal damage to afflicted enemies and prevent them from moving, blinking, going invisible, or attacking."
+  },
+  "npc_dota_hero_ogre_magi": {
+    "ogre_magi_fireblast": "Blasts an enemy unit with a wave of fire, dealing damage and stunning the target.",
+    "ogre_magi_ignite": "Drenches the target and another random unit in volatile chemicals, causing it to burst into flames. The target is in immense pain, taking damage and moving more slowly.",
+    "ogre_magi_bloodlust": "Incites a frenzy in a friendly unit, increasing its movement speed and attack speed. Gives bonus attacks speed if cast on Ogre himself. Can be cast on towers.",
+    "ogre_magi_unrefined_fireblast": "Blasts an enemy unit with a wave of fire, dealing 150 + 1.5x Ogre's Strength in damage and stunning the target. Its mana cost is 35% of Ogre Magi's current mana.",
+    "ogre_magi_smash": "Creates a shield around the target ally, absorbing a percentage of the damage of next 3 attacks from enemy heroes. When damage is absorbed, a fireball is launched at the attacker. Can be cast on towers.",
+    "ogre_magi_multicast": "Enables Ogre Magi to cast his abilities and items multiple times with each use."
+  },
+  "npc_dota_hero_undying": {
+    "undying_decay": "Undying steals strength from all enemy heroes in an area, dealing base damage as he claims the enemy's strength for himself. Deals 2x damage to creeps.",
+    "undying_soul_rip": "Undying rips health away from all nearby units and uses it to heal an ally, or damage an enemy. Soul Rip can also be used to heal Tombstone.",
+    "undying_tombstone": "Summons a tombstone at the target point. Zombies will frequently spawn next to every enemy unit in the area around the Tombstone, and attack them. Zombies have the Deathlust ability, which causes their attacks to slow the target, and if the target reaches below a certain amount of health, increases the attack and movement speed of the zombie.",
+    "undying_flesh_golem": "Undying transforms into a horrifying flesh golem. Gains a percentage increase to strength and imbues attacks with a slow and damage amplification."
+  },
+  "npc_dota_hero_rubick": {
+    "rubick_telekinesis": "Rubick uses his telekinetic powers to lift the enemy into the air briefly and then hurls them back at the ground. The unit lands on the ground with such force that it stuns nearby enemies.",
+    "rubick_fade_bolt": "Rubick creates a powerful stream of arcane energy that travels between enemy units, dealing damage and reducing their attack damage. Each jump deals less damage.",
+    "rubick_arcane_supremacy": "Rubick's mastery of the arcane allows him to have a larger cast range and increased potency.",
+    "rubick_empty1": "Spells acquired with Spell Steal will replace this slot.",
+    "rubick_empty2": "Spells acquired with Spell Steal will replace this slot.",
+    "rubick_spell_steal": "Rubick studies the trace magical essence of one enemy hero, learning the secrets of the last spell the hero cast. Rubick can use this spell as his own for several minutes or until he dies, and stolen spells last longer on enemies.",
+    "rubick_telekinesis_land": "Chooses the location the target will land when Telekinesis finishes.",
+    "rubick_might_and_magus": "Each 1% Spell Amplification also increases Rubick's attack damage by 0.75% and Magic Resistance by 0.75%.",
+    "rubick_telekinesis_land_self": "Chooses the location you will land when Telekinesis finishes."
+  },
+  "npc_dota_hero_disruptor": {
+    "disruptor_thunder_strike": "Repeatedly strikes the targeted unit with lightning. Each strike damages nearby enemy units in a small radius and slows enemy movement and attack speed by 100% for x1.75 seconds. Provides vision of its target.",
+    "disruptor_glimpse": "Teleports the target hero back to where it was 4 seconds ago. Instantly kills illusions. Deals damage equal to a percentage of the distance glimpsed, that cannot go over a damage maximum.",
+    "disruptor_kinetic_field": "After a short formation time, creates a circular barrier of kinetic energy that enemies can't pass.",
+    "disruptor_electromagnetic_repulsion": "Whenever Disruptor takes more than 250 damage from any source within 400 radius, all nearby enemies within are pushed back up to a 400 unit distance.",
+    "disruptor_static_storm": "Creates a damaging static storm that also silences all enemy units in the area for the duration. The damage starts off weak, but increases in power over the duration."
+  },
+  "npc_dota_hero_nyx_assassin": {
+    "nyx_assassin_impale": "Rock spikes burst from the earth along a straight path. Enemy units take damage, then are hurled into the air and stunned.",
+    "nyx_assassin_jolt": "Deals damages to the enemy equal to a percentage of its Max Mana. Deals additional damage equal to a percentage of the damage the target has taken from Nyx Assassin in the last 15s. Resets accumulated damage before applying damage.",
+    "nyx_assassin_spiked_carapace": "When activated while above ground, Spiked Carapace reflects and negates damage dealt to Nyx Assassin (max once from each source), as well as stunning the source of the damage. Activating Spiked Carapace will not break Vendetta invisibility.\n\nWhile Burrowed, Spiked Carapace instantly stuns nearby enemies when cast.",
+    "nyx_assassin_burrow": "Nyx Assassin buries himself beneath the battlefield over a short duration. Once burrowed, Spiked Carapace instantly stuns nearby enemies when cast, the range of Mind Flare and Impale is increased, and Impale's cooldown is decreased. While burrowed, Nyx Assassin is stationary, unable to attack, and invisible. Nyx Assassin gains damage reduction from all damage sources.",
+    "nyx_assassin_nyxth_sense": "Nyx Assassin can detect heroes within 400 units of himself.",
+    "nyx_assassin_vendetta": "Allows Nyx Assassin to become invisible and gain a speed bonus. If Nyx Assassin attacks to break the invisibility, massive bonus damage is dealt with the attack. Nyx Assassin has 75 additional attack range and a 70% faster attack animation for this attack.",
+    "nyx_assassin_unburrow": "Emerge from the burrow."
+  },
+  "npc_dota_hero_naga_siren": {
+    "naga_siren_mirror_image": "Creates multiple images of Naga Siren under her control.\n\nDISPEL TYPE: Basic Dispel",
+    "naga_siren_ensnare": "Interrupts the target and traps them in place, preventing movement or blinking. Can target units affected by Song of the Siren.",
+    "naga_siren_reel_in": "CHANNELED - Naga Siren channels for up to 5 seconds, pulling all units affected by Naga's Ensnare in a 1600 range towards her at a speed of 200. Channeling ends when the Ensnared unit is 100 distance away.",
+    "naga_siren_eelskin": "Naga Siren gets 8% evasion per other Naga Siren within 900 radius.",
+    "naga_siren_song_of_the_siren": "All enemies in range of the Naga Siren are put into a magical stasis where they cannot act or be attacked. Allies in range recover a percentage of their health per second. Using Song of the Siren again will end the duration early.",
+    "naga_siren_song_of_the_siren_cancel": "Release enemy units from your song so they can be targeted again."
+  },
+  "npc_dota_hero_keeper_of_the_light": {
+    "keeper_of_the_light_illuminate": "CHANNELED - Channels light energy, building power the longer it's channeled. Once released, a wave is sent forth that deals damage and gives vision in its path. The longer it is channeled, the more damage is dealt.",
+    "keeper_of_the_light_blinding_light": "A blinding light flashes over the targeted area, knocking back and blinding the units in the area, causing them to miss some attacks. Knockback is 400 range over 0.6 seconds.",
+    "keeper_of_the_light_chakra_magic": "Restores mana to the target unit and reduces cooldowns of all basic abilities currently on cooldown by a fixed amount. Is 30% more effective when used on himself.",
+    "keeper_of_the_light_will_o_wisp": "Summons Ignis Fatuus at the targeted area. Alternates on and off, drawing enemies closer with its mesmerising flicker.",
+    "keeper_of_the_light_spirit_form": "Ezalor temporarily turns his body luminescent, gaining bonus movement speed, cast range, and allows Illuminate to be channeled by a separate spirit and heal allies.",
+    "keeper_of_the_light_illuminate_end": "Release the channel early.",
+    "keeper_of_the_light_special_reserve": "Keeper of the Light cannot go below 75 mana."
+  },
+  "npc_dota_hero_wisp": {
+    "wisp_tether": "Tethers Io to an allied unit, granting bonus movement speed to both. When Io restores health or mana, the tethered unit gains a portion of that amount. The tether breaks when the allied unit moves too far away, or Io cancels the tether. Tether slows enemies touching it.",
+    "wisp_spirits": "Summon five particle spirits that dance in a circle around Io. If a particle collides with an enemy hero, it explodes, damaging all enemy units in an area around it. Creeps take minor damage from touching a particle spirit, but do not cause them to explode. When its duration ends, any remaining Spirits explode.",
+    "wisp_overcharge": "Io gains health regeneration based on max health. If Io is Tethered to an ally, that unit also gains any bonuses granted by Overcharge.",
+    "wisp_spirits_in": "Sends the spirits closer to you. Can be toggled on and off.",
+    "wisp_spirits_out": "Sends the spirits farther away from you. Can be toggled on and off.",
+    "wisp_relocate": "Teleports Io and a tethered ally to any location. After the spell expires, Io and the tethered ally will return to their original location. Double-click to teleport to your team's base fountain.",
+    "wisp_tether_break": "Break the link to the tethered unit.",
+    "wisp_essence_conduction": "Io regenerates from consumables and certain items 2x faster."
+  },
+  "npc_dota_hero_visage": {
+    "visage_grave_chill": "Visage drains the movement and attack speed of the targeted unit, gaining it for itself and nearby familiars.",
+    "visage_soul_assumption": "Visage gathers charges of soul essence each time nearby heroes take more than 100 damage. When the essence is released, it deals base damage as well as damage for each gathered soul charge.",
+    "visage_gravekeepers_cloak": "Visage generates a layered barrier that protects him from damage. If he receives damage from a player, one layer is removed, and takes time to recover.",
+    "visage_stone_form_self_cast": "Orders the Familiar closest to Visage to cast Stone Form in its current location, turning into stone and smashing into the ground, stunning and damaging all targets in the area. The Familiar becomes invulnerable, and will regain its health very rapidly. After 6 seconds, the Familiar will automatically leave Stone Form.\n\n Can be alt-cast to order the closest Familiar to the target location to move there and cast Stone Form.",
+    "visage_silent_as_the_grave": "Turns Visage and familiars invisible, granting Visage bonus movement speed and upgrading its movement type to flying. When Visage or its familiars leave invisibility they deal more damage for a short duration. Lasts 30 seconds. Invisibility ends when attacking or casting.",
+    "visage_summon_familiars": "Conjures 2 blind Familiars to fight for Visage. Familiars possess the Stone Form ability, that allows them to turn into stone, stunning enemies upon landing. While in Stone Form, Familiars are invulnerable, and rapidly regenerate their health. Familiars grant high bounty when killed.",
+    "visage_summon_familiars_stone_form": "After a short delay, the Familiar turns into stone and smashes into the ground, stunning and damaging all targets in the area. The Familiar becomes invulnerable, and will regain its health very rapidly. After 6 seconds, the Familiar will automatically leave Stone Form. \n\n Can be alt-cast to order the Familiar to move to the target location and cast Stone Form.",
+    "visage_lurker": "Visage's ability cooldown durations are accelerated as long as he's not taking damage.\n\nGrants a stack every 2s that Visage does not take damage. Each stack grants 2% cooldown acceleration with a max of 8 stacks. Stacks fade after 2s upon taking any damage."
+  },
+  "npc_dota_hero_slark": {
+    "slark_dark_pact": "After a short delay, Slark sacrifices some of his life blood, purging most negative debuffs and dealing damage to enemy units around him and to himself. Slark only takes 30% of the damage.\n\nDISPEL TYPE: Strong Dispel",
+    "slark_pounce": "Slark leaps forward, leashing the first hero he connects. That unit can only move a limited distance away from Slark's landing position.",
+    "slark_saltwater_shiv": "Slark slices the target with his salty shiv, stealing a portion of the target's movement speed, Health Regen and Health Restoration. This effect stacks.",
+    "slark_depth_shroud": "Creates a cloud at the target location. All allies inside the radius are hidden and affected by Shadow Dance.",
+    "slark_essence_shift": "Slark steals the life essence of enemy heroes with his attacks, draining 1 of each of their attributes and converting them to bonus 3 Agility. If Slark kills an affected enemy hero, he permanently steals 1 Agility.",
+    "slark_shadow_dance": "When not visible to the enemy team, Slark passively gains bonus movement speed and health regeneration. If Slark is damaged by a neutral unit, the passive movement and health regeneration bonuses are lost for 2 seconds.\n\nWhen activated, Slark hides himself in a cloud of shadows, becoming immune to detection. Attacking, casting spells, and using items will not reveal Slark, but enemies can see the cloud itself."
+  },
+  "npc_dota_hero_medusa": {
+    "medusa_split_shot": "Medusa magically splits her shot into several arrows. These arrows deal a lower percent of her normal damage.\n\nThe extra targets will not receive other attack effects (such as critical strike).",
+    "medusa_mystic_snake": "A mystic snake made of energy jumps from target to target dealing damage. Damage and speed increases with each jump. After it reaches its last target, it returns to Medusa to replenish her with mana. The snake returns a percentage of the targets' total mana.",
+    "medusa_gorgon_grasp": "Medusa fires arrows in a line that land in 3 groups, with each grouping larger than the previous. Enemies struck by a volley of arrows take an initial burst of damage and then are rooted, cannot turn, are revealed to the enemy, and take damage per second.",
+    "medusa_cold_blooded": "When Medusa is targeted with a spell, a single-target Mystic Snake is sent back towards the enemy that turns them into stone for 1s.",
+    "medusa_mana_shield": "Creates a shield that absorbs 98% of incoming damage in exchange for Medusa's mana that increases with each level of Medusa. Illusions absorb 60% less damage per point of mana.",
+    "medusa_stone_gaze": "Any enemy units looking at Medusa will have their movement and attack speed slowed. If 2 seconds of total time is accumulated looking at Medusa while Stone Gaze is active, that unit will turn to stone. Petrified units are stunned, and take bonus physical attack damage."
+  },
+  "npc_dota_hero_troll_warlord": {
+    "troll_warlord_switch_stance": "Troll Warlord swaps from using ranged to melee attacks. Melee attacks have decreased base attack time.",
+    "troll_warlord_whirling_axes_ranged": "Troll hurls a fistful of five axes in a cone shape over 950 range, slowing and damaging enemy units.",
+    "troll_warlord_whirling_axes_melee": "Troll hurls two axes around him in a close range area of effect, damaging enemy units and causing them to miss some attacks.",
+    "troll_warlord_fervor": "With each continuous blow on the same target, Troll gains increased attack speed. If Troll changes targets, the stacks drop to zero.",
+    "troll_warlord_berserkers_rage": "While in melee form, Troll Warlord's attacks have a chance to ensnare, preventing the target from moving or using mobility spells and has additional movement speed and armor.\n\nWhen in ranged form, Troll Warlord's attacks have a chance to Maim the target, dealing bonus damage, and slowing the target's movement and attack speed.",
+    "troll_warlord_battle_trance": "Troll unleashes a powerful battle trance, that forces you to continuously attack the closest enemy unit within 900 range, prioritizing heroes. Damage does not kill you during this mode. Grants you bonus lifesteal, attack speed and movement speed. Applies a Basic Dispel.\n\nDISPEL TYPE: Basic Dispel"
+  },
+  "npc_dota_hero_centaur": {
+    "centaur_hoof_stomp": "After a brief windup, Centaur Warrunner slams the ground, stunning and damaging nearby enemy units. During the delay, he is disarmed but can move.",
+    "centaur_double_edge": "Centaur strikes a mighty blow at melee range, damaging both himself and a small area around the target. Deals extra damage based on your strength. Centaur cannot die from Double Edge.",
+    "centaur_return": "Centaur counters all attacks, dealing damage back to the attacker. Returns a fixed amount plus a percentage of your strength. Deals half damage to towers.",
+    "centaur_work_horse": "Centaur hitches a cart behind him. While active, Centaur gains the benefit of Stampede for the current level of Stampede, and can cast Hitch a Ride on a target ally.",
+    "centaur_mount": "Centaur tosses an ally into a cart hitched behind him. While in the cart, the ally is invulnerable and can still cast and attack normally, but cannot move independently or be targeted by opponents. Increases the attack range of melee heroes by 200.",
+    "centaur_stampede": "Centaur leads all allies into a vicious charge causing them to move through units at max speed and slow any enemy units they trample. Trampled enemies take damage based on Centaur Warrunner's strength. Each enemy can be trampled once.",
+    "centaur_rawhide": "Permanently gain 25 max health every 120s."
+  },
+  "npc_dota_hero_magnataur": {
+    "magnataur_shockwave": "Magnus sends out a wave of force, damaging enemy units in a line, pulling them towards him, and slowing them for a brief period.",
+    "magnataur_empower": "Gives an allied unit bonus damage and cleave on attack. Magnus receives 30% larger bonus.",
+    "magnataur_skewer": "Magnus rushes forward, goring enemy units on his massive tusk. Heroes hit on the way will be dragged to the destination, then damaged and affected by slowed movement speed. The damage is increased based on distance traveled.",
+    "magnataur_horn_toss": "Magnus tosses any enemies in front of him, launching them to his rear. Enemies take damage, spend 0.6 seconds in the air, and are stunned while in the air and an additional amount of time after landing.",
+    "magnataur_solid_core": "Magnus has slow resistance and suffers less knockback from enemy's abilities and items."
+  },
+  "npc_dota_hero_shredder": {
+    "shredder_whirling_death": "Timbersaw whirls extremely sharp edges, damaging enemies and destroying trees around him in an area. If an enemy hero is affected, it loses some of its primary attribute for a short duration. Whirling Death will deal bonus damage per tree destroyed.",
+    "shredder_timber_chain": "Timbersaw fires a chain that embeds itself in the first tree it hits, pulling him towards it. Any enemy in the path takes damage.",
+    "shredder_reactive_armor": "Each time Timbersaw is attacked, he gains increased health regen and armor. Hero attacks are counted as 4x the amount.",
+    "shredder_flamethrower": "Releases a flame in the direction Timbersaw is facing. Applies a debuff that deals damage per second and slows enemy movement speed. Affects buildings for reduced damage.",
+    "shredder_chakram": "Fires Timbersaw's main saw blade at the target location where it will spin in place, dealing damage in an area around it. Enemies caught in the saw blade will move more slowly for every 5% of health missing. The blade deals damage and cuts down trees in its path when fired and retracted. While active the ability costs mana, and Timbersaw loses the ability to attack.",
+    "shredder_return_chakram": "Returns the Chakram to Timbersaw.",
+    "shredder_exposure_therapy": "Whenever Timbersaw destroys a tree, he gains 4 mana."
+  },
+  "npc_dota_hero_bristleback": {
+    "bristleback_viscous_nasal_goo": "Covers a target in snot, causing it to have reduced armor and movement speed for 5 seconds. Multiple casts stack and refresh the duration.",
+    "bristleback_quill_spray": "Sprays enemy units with quills dealing damage in an area of effect around Bristleback. Deals bonus damage for every time a unit was hit by Quill Spray in the last 14 seconds.",
+    "bristleback_bristleback": "Bristleback takes less damage if hit on the sides or rear. If Bristleback takes 275 damage from the rear, he releases a Quill Spray of the current level.",
+    "bristleback_hairball": "Coughs a quill-packed hairball towards the target location. Erupts at the location, hitting enemies with Viscous Nasal Goo stacks and Quill Spray.",
+    "bristleback_warpath": "Bristleback works himself up into a fury every time he casts a spell, increasing his movement speed and damage.",
+    "bristleback_prickly": "Bristleback has 10% damage and debuff duration amp against enemy heroes that are behind him."
+  },
+  "npc_dota_hero_tusk": {
+    "tusk_ice_shards": "Tusk compresses shards of ice into a ball of frozen energy that damages all enemies it comes in contact with. When the ball reaches its target destination the shards are released, creating a barrier that lasts for 4 seconds.",
+    "tusk_snowball": "Tusk begins rolling into a snowball. Allies within a 325 radius can also be added to the snowball by right-clicking on them, even while the snowball is moving. Once launched, any enemies caught in the snowball's path will be stunned and take damage. Each allied Hero in the snowball will add to its damage and stun duration.",
+    "tusk_walrus_kick": "Kicks the closest enemy unit in the drawn direction, stunning, damaging, and slowing them. Also deals damage to all heroes within 250 radius of its landing area. Cooldown is reduced by 50% if kicking a creep.",
+    "tusk_bitter_chill": "Passively slows the attack speed of all enemy heroes within 350 radius by 20.",
+    "tusk_walrus_punch": "Tusk connects with his mighty Walrus Punch, a critical strike with bonus damage so powerful it launches its victim into the air.",
+    "tusk_launch_snowball": "Launch the snowball toward the target."
+  },
+  "npc_dota_hero_skywrath_mage": {
+    "skywrath_mage_arcane_bolt": "Skywrath Mage launches a slow-moving bolt of arcane magic, dealing damage to an enemy unit based on Skywrath Mage's intelligence.",
+    "skywrath_mage_concussive_shot": "Skywrath Mage sets off a long range shot that hits the closest hero within a long range. Upon impact, it deals damage and slows in an area of effect.",
+    "skywrath_mage_ancient_seal": "Skywrath Mage seals the targeted unit with an ancient rune, silencing it and causing it to take additional damage from spells.",
+    "skywrath_mage_ruin_and_restoration": "Skywrath Mage has 25% Spell Lifesteal.",
+    "skywrath_mage_mystic_flare": "Skywrath Mage uses his ultimate magical ability to conjure a precise and violent mystical field that lays waste to his adversaries. Deals massive damage distributed evenly among any Heroes in the area over 2 seconds."
+  },
+  "npc_dota_hero_abaddon": {
+    "abaddon_death_coil": "Abaddon releases a coil of deathly mist that can damage an enemy unit or heal a friendly unit at the cost of some of Abaddon's health.",
+    "abaddon_aphotic_shield": "Summons dark energies around an ally unit, dispelling them and creating an all damage barrier that absorbs a set amount of damage before expiring. When the barrier is destroyed it will burst and deal damage equal to the amount it could absorb to an area around it.\n\nDISPEL TYPE: Strong Dispel",
+    "abaddon_frostmourne": "Abaddon strikes an enemy, affecting them by a chilling curse, slowing them, causing them to take damage over time, and all attacks against them gain an attack speed boost. Damage over time component to buildings is reduced by 100%.",
+    "abaddon_withering_mist": "Damaging enemies applies the Withering Mist debuff for 5s. Affected enemies have their Health Restoration reduced by 35% if they are below 40% HP.",
+    "abaddon_borrowed_time": "When activated, dispels you and all damage dealt to you will heal instead of harm. If the ability is not on cooldown, it will automatically activate if your health falls below 400.\n\nDISPEL TYPE: Strong Dispel"
+  },
+  "npc_dota_hero_elder_titan": {
+    "elder_titan_echo_stomp": "CHANNELED - Elder Titan and his Astral Spirit both stomp the ground, damaging and knocking nearby enemy units unconscious around their locations. The Elder Titan stomp deals physical damage, while the Spirit stomp deals magical damage.",
+    "elder_titan_ancestral_spirit": "Elder Titan sends forth his Astral Spirit, damaging any units it passes through. When the spirit rejoins the Titan, it grants bonus damage, armor, and movement speed for each unit it passed through.\n\nThe Astral Spirit possesses the Echo Stomp, Return Spirit, and Natural Order abilities.",
+    "elder_titan_natural_order": "Reduces all elements to their basic levels, removing base armor and magic damage resistance from nearby enemy units. The armor reduction is centered around the hero, while the magic armor reduction is centered around Astral Spirit.",
+    "elder_titan_move_spirit": "Moves the Astral Spirit to target location.",
+    "elder_titan_earth_splitter": "Sends forth a jagged crack in front of Elder Titan. After 3 seconds, the crack implodes, slowing movement while dealing damage to each enemy based on their maximum life. Half of the damage dealt is Magical damage, while the other half is Physical damage.",
+    "elder_titan_return_spirit": "Returns the Astral Spirit to Elder Titan.",
+    "elder_titan_tip_the_scales": "Allied creeps and buildings affected by Glyph of Fortification or Roshan's Banner deal 100% bonus damage."
+  },
+  "npc_dota_hero_legion_commander": {
+    "legion_commander_overwhelming_odds": "Turns the foes' numbers against them, dealing damage to all enemies in the area. Damage increases with each enemy unit or hero in the area. Also grants bonus Attack Speed to Legion Commander. Can be cast during Duel.",
+    "legion_commander_press_the_attack": "Removes debuffs and disables from the target friendly unit, and grants bonus movement speed and health regen for a short time.\n\nDISPEL TYPE: Strong Dispel",
+    "legion_commander_moment_of_courage": "When attacked, Legion Commander has a chance to immediately counterattack with bonus lifesteal.",
+    "legion_commander_outfight_them": "Attacking an enemy hero that is equal or higher level than you increases your Health Restoration by 30% for 4s.",
+    "legion_commander_duel": "Legion Commander and the target enemy hero are forced to attack each other for a short duration. Neither hero can use items or abilities, with the exception of Legion Commander being able to cast Overwhelming Odds. If either hero dies during the duration, the hero winning the Duel gains permanent bonus damage."
+  },
+  "npc_dota_hero_ember_spirit": {
+    "ember_spirit_searing_chains": "Ember Spirit unleashes fiery bolas that wrap around nearby enemies, anchoring them in place and dealing damage each second.",
+    "ember_spirit_sleight_of_fist": "Ember Spirit dashes around with blazing speed, attacking all enemies in the targeted area of effect, then returning to his start location. Deals bonus damage to heroes.",
+    "ember_spirit_flame_guard": "Ember Spirit surrounds himself with a ring of fire that consumes incoming magic damage, absorbing a percentage of the damage taken. Flame Guard deals damage per second in an area around Ember Spirit while Flame Guard is active. If the shield is broken, the damage is also lost.",
+    "ember_spirit_activate_fire_remnant": "Select the Fire Remnant to arrive at.",
+    "ember_spirit_immolation": "Ember Spirit is continuously burning, dealing damage per second to all nearby enemies at all times.",
+    "ember_spirit_fire_remnant": "Sends a Fire Remnant that runs to the target location at 250% Ember Spirit's speed. Using Activate Fire Remnant, Ember Spirit will dash out to all active Fire Remnants, destroying them and dealing damage in an area and then moving to the nearest Remnant. Ember Spirit will end at the Remnant closest to the targeted location."
+  },
+  "npc_dota_hero_earth_spirit": {
+    "earth_spirit_boulder_smash": "Earth Spirit smashes the target enemy or ally, sending them in the direction he is facing. If Earth Spirit targets an area, he will smash the nearest unit in a 200 radius, prioritizing Stone Remnants. The travelling unit or Remnant damages all enemy units it hits. If an enemy is hit by a Stone Remnant, they are also slowed. Stone Remnants travel further than other units.",
+    "earth_spirit_rolling_boulder": "Earth Spirit gathers himself into a boulder and, after a 0.6s delay, rolls toward the target location, dealing 60 + 100% STR damage and stunning enemy units. He will stop if he collides with an enemy hero or is stunned. If he rolls over a Stone Remnant, he will travel further and faster, and stun enemies for longer.",
+    "earth_spirit_geomagnetic_grip": "Earth Spirit pulls the target Stone Remnant or Allied Unit. Enemies struck by the gripped target will be silenced.\n\nPulled Remnants also deal damage to struck enemies.\n\nCast range is reduced when targeting an ally.",
+    "earth_spirit_stone_caller": "Call a Stone Remnant to the target location. Stone Remnants have no vision and are invulnerable, and can be used with Earth Spirit's abilities. Calling a Stone Remnant consumes a charge, which recharge over time. Stone Remnant has 7 charges.\n\nEarth Spirit passively gains 2.5% bonus damage per unused Stone Remnant charge, and gains an additional 7.5% bonus damage for 10s when a Stone Remnant is targeted with an ability (does not stack).",
+    "earth_spirit_petrify": "Earth Spirit temporarily enchants a hero, granting them the properties of a Stone Remnant. After a short duration the remnant shatters, releasing the hero and damaging nearby enemies. \nCan be cast on Stone Remnants. Has a 5 second cooldown when used that way.\nHas a larger cast range when cast on an ally hero.",
+    "earth_spirit_magnetize": "Magnetizes units in a small nearby area, causing them to take damage for a short duration. Magnetized heroes cause nearby Stone Remnants to explode, destroying the remnant and refreshing Magnetize's duration on all nearby enemies. This process can repeat multiple times. If an enemy hero is affected by Geomagnetic Grip or Boulder Smash, all magnetized heroes share the effects."
+  },
+  "npc_dota_hero_terrorblade": {
+    "terrorblade_reflection": "Terrorblade brings forth an invulnerable dark reflection of all enemy heroes in a target area. Affected enemy heroes have movement and attack speeds slowed and attacked by their reflection.",
+    "terrorblade_conjure_image": "Creates an illusion of Terrorblade that deals damage.",
+    "terrorblade_metamorphosis": "Terrorblade transforms into a powerful demon with a ranged attack. Any of Terrorblade's illusions that are within 1200 range will also be transformed by Metamorphosis.",
+    "terrorblade_demon_zeal": "Costs part of Terrorblade's current HP to cast, providing Terrorblade and nearby illusions bonus movement, HP Regen and attack speed. Reflection illusions gain 50% of the bonuses. Can't be cast while in Metamorphosis and Metamorphosis will remove Demon Zeal",
+    "terrorblade_terror_wave": "Causes a wave to travel outwards in all directions forcing enemy heroes to become Feared upon impact and dealing damage, and grants Terrorblade Metamorphosis for a short time.",
+    "terrorblade_sunder": "Severs the life from both Terrorblade and a target hero, exchanging a percentage of both units' current health. Some health points must remain.",
+    "terrorblade_dark_unity": "Nearby Illusions created by Terrorblade have bonus attack damage."
+  },
+  "npc_dota_hero_phoenix": {
+    "phoenix_icarus_dive": "Phoenix dives forward in an arc with a fixed distance in the targeted direction, dealing damage over time and slowing the movement speed of any units it comes into contact with, and then orbiting back to its original position. If Phoenix casts Supernova, the dive ends.",
+    "phoenix_fire_spirits": "Summons 4 fire spirits that circle around Phoenix. Each spirit can be launched independently at a targeted area of effect. Affected enemy units take damage over time and have their attack speed greatly reduced.",
+    "phoenix_sun_ray": "Phoenix expels a beam of light at the cost of its own health. The beam damages enemies and heals allies for a base amount plus a percentage of their health. The percentage increases as the beam continues to fire.",
+    "phoenix_sun_ray_toggle_move": "Toggles slow forward movement during Sun Ray firing.",
+    "phoenix_blinding_sun": "Phoenix ability debuffs apply a stackable 2% Miss chance per second. Lasts 4 seconds.",
+    "phoenix_supernova": "The Phoenix willingly ends its current life for the chance to be reborn. Transforms into a burning sun that scorches enemies in a huge area. The sun can be destroyed by attacks from enemy Heroes. After 6 seconds the sun explodes, stunning all nearby enemies while restoring Phoenix to full health and mana with refreshed abilities.\n\nDISPEL TYPE: Strong Dispel",
+    "phoenix_launch_fire_spirit": "Each fire spirit can be launched independently at a targeted area of effect. Affected enemy units take damage over time and have their attack speed greatly reduced.",
+    "phoenix_icarus_dive_stop": "Immediately cancels the dive.",
+    "phoenix_sun_ray_stop": "Immediately stops the Sun Ray."
+  },
+  "npc_dota_hero_oracle": {
+    "oracle_fortunes_end": "CHANNELED - Gathers Oracle's power into a bolt of scouring energy that, when released, damages, roots, and dispels enemies of buffs in an area around the target. If target is an ally it will only dispel debuffs. The root duration increases with channeling time.\n\nDISPEL TYPE: Basic Dispel",
+    "oracle_fates_edict": "Oracle enraptures a target, disarming them and granting them 100% magic damage resistance.",
+    "oracle_purifying_flames": "Burns away impurities, dealing heavy magic damage to the target before causing them to regenerate health over time. The amount of health regenerated over its duration exceeds the amount of initial damage. Can be cast on enemies and allies.",
+    "oracle_rain_of_destiny": "Brings forth rain to the target area. Enemies standing in the area receive damage and have reduced Heal Amplification. Allies in the area heal and have increased incoming Heal Amplification.",
+    "oracle_false_promise": "Temporarily alters an ally's destiny, delaying any healing or damage taken until False Promise ends. Any healing that is delayed by False Promise is amplified. Removes most negative status effects and disables on initial cast.\n\nDISPEL TYPE: Strong Dispel"
+  },
+  "npc_dota_hero_techies": {
+    "techies_sticky_bomb": "Lobs a Sticky Bomb towards the target area. If it lands next to an enemy hero, the bomb will stick to it, slowing its movement speed. After a few seconds the bomb will explode, dealing damage in an area around the detonation and applying a secondary slow for 3 seconds.",
+    "techies_reactive_tazer": "Techies trigger an electric charge giving them bonus movement speed for a short period of time. Enemies attacking Techies are temporarily disarmed and get a Basic Dispel. At the end of the effect, the charge explodes, disarming all enemies within the radius.",
+    "techies_suicide": "Techies hurtle themselves into the enemy's midst, detonating charges upon impact which deal massive area of effect damage and stun enemies. Upon landing, the assault deals Techies non-lethal damage equal to a percentage of their current health.",
+    "techies_minefield_sign": "Plant a warning sign, causing Sticky Bombs and Proximity Mines within its radius to be invulnerable and deal 15% more damage. Only one sign can exist at a time. Lasts 60 seconds.",
+    "techies_land_mines": "Plant an invisible mine that cannot be detected by True Sight, but is visible if an enemy is within the active 500 AoE of the mine. Mines detonate if an enemy is standing within the active AoE for 1 seconds dealing damage and temporarily reducing the enemy's Magic Resistance. The explosion deals full damage if the target is within 150 radius and decreases up to 60% on the edge. Deals 30% damage to buildings.",
+    "techies_reactive_tazer_stop": "Detonate Reactive Tazer immediately."
+  },
+  "npc_dota_hero_winter_wyvern": {
+    "winter_wyvern_arctic_burn": "Winter Wyvern soars upon an arctic wind, granting her unobstructed movement and allowing her to exhale a blistering chill into each attack. While soaring, her attacks travel further and faster, and slow enemies with a magical freeze that strips them of 4% of their current health each second.",
+    "winter_wyvern_splinter_blast": "Launches a ball of brittle ice toward a unit. The ice shatters on impact, leaving the primary target completely unaffected, while hurling damaging splinters into nearby enemies in a 500 base radius. Enemies struck by these splinters are slowed by 28%.",
+    "winter_wyvern_cold_embrace": "Encases an ally in an icy cocoon, freezing them solid while healing a base amount as well as a percentage of their maximum health each second. The cocoon blocks all physical damage.",
+    "winter_wyvern_eldwurm_scholar": "When a Shrine of Wisdom grants experience to allies, Winter Wyvern shares the knowledge with her entire team, granting 20% of the experience to each of the 3 heroes that did not collect the initial bonus.",
+    "winter_wyvern_winters_curse": "Winter Wyvern dispells then freezes an enemy in place while striking those nearby with a maddening curse which causes them to attack their frozen ally with increased attack speed. The frozen ally and those cursed to attack their ally are immune to all damage from their enemies with the exception of damage from Winter Wyvern or her controlled units."
+  },
+  "npc_dota_hero_arc_warden": {
+    "arc_warden_flux": "Infuses a lone enemy unit with swirling, volatile energy, dealing damage over time and slowing the target. The damage is not applied if another enemy unit is near the target.",
+    "arc_warden_magnetic_field": "Arc Warden generates a circular distortion field of magnetic energy. The magnetic field grants bonus attack speed and protects allied units within it by evading attacks coming from outside the field.",
+    "arc_warden_spark_wraith": "Summons a Spark Wraith that slowly materializes and patrols a targeted area until an enemy comes within its range. Once a target has been found the wraith fuses with them, dealing magical damage and slowing the unit.",
+    "arc_warden_runic_infusion": "Upon activating any rune, gain the Regeneration Rune buff for 4s.",
+    "arc_warden_tempest_double": "Briefly refocusing its fractured elements into a single form, the Arc Warden is able to create a perfect electrical duplication of itself. The duplicate can use all of Arc Warden's current items and special Tempest Double versions of his spells, except most consumables and items that drop on death. The duplicate has separate item and ability cooldowns.\n\nThe Tempest Double loses its sense of self and fractures over time, becoming slower and less accurate."
+  },
+  "npc_dota_hero_abyssal_underlord": {
+    "abyssal_underlord_firestorm": "Calls down waves of fire that damage enemy units in the target area, burning for additional damage over time.",
+    "abyssal_underlord_pit_of_malice": "A deadly pit is conjured at the target location; any unit that enters will be damaged and rooted. Each enemy unit within the pit are affected by the root only every 3.6 seconds.",
+    "abyssal_underlord_atrophy_aura": "Nearby enemy units are weakened, losing a portion of their base damage. If an enemy dies while under this effect, Underlord gains temporary bonus damage.",
+    "abyssal_underlord_raid_boss": "After an allied hero Teleports, they temporarily gain Damage Reduction and Movement Speed. Allies receive 2x bonuses if teleporting via Fiend's Gate.",
+    "abyssal_underlord_dark_portal": "Opens 2 portals, one next to Underlord and one in the target location. Heroes can channel a portal for 3.5 seconds to teleport to the other side. Portals have to be at least 1500 away from each other.\n\nDouble-click to teleport to your team's base, in front of your fountain."
+  },
+  "npc_dota_hero_monkey_king": {
+    "monkey_king_boundless_strike": "Monkey King enlarges his staff and slams it against the ground, stunning enemies in a line and damaging them with bonus damage and a critical hit based on his attack. Has True Strike.",
+    "monkey_king_tree_dance": "Monkey King jumps to a tree and perches atop it. While perched, he gains the Primal Spring ability-a channeled leap attack. If Monkey King's tree is destroyed, he falls and is stunned for 3 seconds. Taking damage while on the ground puts Tree Dance on cooldown.",
+    "monkey_king_primal_spring": "CHANNELED - Monkey King springs out from his tree perch, damaging and slowing enemies in the area where he lands. Damage and slow amounts are in proportion to channel duration.",
+    "monkey_king_jingu_mastery": "Monkey King's attacks awaken the Jingu Bang's power. Upon the fourth hit on the same enemy hero, Monkey King earns 4 charged attacks that have bonus damage and lifesteal.",
+    "monkey_king_mischief": "Changes Monkey King's shape to deceive opponents, using the environment nearby as inspiration for the disguise. Taking damage, attacking, or using any item or ability breaks Monkey King's disguise. Grants damage immunity for 0.1 seconds upon transforming.",
+    "monkey_king_wukongs_command": "Monkey King creates a circular formation of soldiers that spread out from his position. If Monkey King leaves the area his soldiers disperse. The soldiers have Monkey King's attack and only target heroes. Monkey King is granted bonus armor for the spell's duration.",
+    "monkey_king_untransform": "Reverts Monkey King's shape to his original form."
+  },
+  "npc_dota_hero_pangolier": {
+    "pangolier_swashbuckle": "Pangolier dashes along the target line, then slashes and briefly slows all enemies in the drawn direction with several quick swipes.\n\nLucky Shot has a chance to activate from this damage.",
+    "pangolier_shield_crash": "Pangolier jumps in the air and slams back to the ground in front of his current position damaging all enemies in a radius. Pangolier gains an all damage barrier for a short time if Shield Crash hits an enemy hero.\n\nForward movement is maintained if Shield Crash is used while Rolling Thunder is active, and allows Rolling Thunder to clear walls or cliffs.",
+    "pangolier_lucky_shot": "Pangolier rolls the dice and lets fate decide the outcome for his enemies. Grants a chance to drastically slow their attack speed and reduce armor on any damage dealt by Pangolier's attacks or abilities.",
+    "pangolier_rollup": "Pangolier curls into an immobile protective ball, gaining debuff immunity, 60% magic resistance, and allowing him to turn. Can be cast during Rolling Thunder to temporarily hit the brakes. Can cast Rolling Thunder and Shield Crash during Roll Up. If enemies attack Pangolier during this, he will roll away from the attacker, applying Rolling Thunder damage/stun if there are enemies in the way.",
+    "pangolier_gyroshell": "Pangolier curls into a debuff immune ball with 60% additional magic resistance and rolls out. When rolling, he moves at an increased speed and can move through trees, but has a decreased ability to turn. Striking enemies knocks them back, inflicting damage proportional to his attack damage and stunning them when they land. \n\nColliding with walls or cliffs will cause a temporary pause while Pangolier reverses in direction.\n\nDISPEL TYPE: Basic Dispel",
+    "pangolier_gyroshell_stop": "Halt!",
+    "pangolier_rollup_stop": "Ends Pangolier's Roll Up early.",
+    "pangolier_fortune_favors_the_bold": "Random item and ability effects of enemies near Pangolier have a reduced chance to affect him."
+  },
+  "npc_dota_hero_dark_willow": {
+    "dark_willow_bramble_maze": "Dark Willow creates a 500 AoE maze of 4 brambles that grow in the target area after 0.3 seconds. Enemies that walk into a bramble are rooted and take damage over time. Lasts 12 seconds.",
+    "dark_willow_shadow_realm": "Dark Willow recedes into the shadows, becoming untargetable. Her next attack has 600 bonus attack range and deals bonus magic damage, and will end Shadow Realm. Damage scales based on how long she remains under the effects of Shadow Realm, the maximum being reached after 3 seconds.",
+    "dark_willow_cursed_crown": "Dark Willow casts an ancient fae curse on the target. After a delay, the target and nearby enemies are stunned.",
+    "dark_willow_bedlam": "Dark Willow sends her pet wisp to roam around herself for the duration, rapidly attacking nearby enemies. Bedlam cannot be used while Terrorize is active.",
+    "dark_willow_pixie_dust": "Whenever a skill makes Dark Willow become untargetable, she gains +150% HP Regen and +150% Mana Regen while in that state.",
+    "dark_willow_terrorize": "Dark Willow releases her pet wisp to terrorize her enemies. After a short delay, all enemies in the target area become fearful and run toward their home fountain. Terrorize cannot be used while Bedlam is active."
+  },
+  "npc_dota_hero_grimstroke": {
+    "grimstroke_dark_artistry": "Grimstroke paints a curved path of ink with his brush, damaging and slowing enemies. The damage is increased with each enemy the ink hits. Applies Ink Trail on hit.",
+    "grimstroke_ink_creature": "Summons a phantom that moves quickly towards the target, latching to it when she arrives. Once latched, the phantom damages and silences. If she survives the full latch duration she rends her victim for heavy damage and refreshes Phantom's Embrace's cooldown.\n\nHero attacks against the phantom count as 3 attacks each.",
+    "grimstroke_spirit_walk": "Grimstroke shrouds an allied unit in ink, increasing its movement speed. Enemies in range of the allied unit are damaged with inky tendrils over time. After 1 seconds it applies damage and stun in an area around the unit in proportion to how long ink tendril was near any hero.",
+    "grimstroke_return": "Triggers an existing Ink Swell.",
+    "grimstroke_soul_chain": "Binds a targeted enemy hero to its nearest allied hero within the bind radius, preventing both from moving away from each other. Any unit-targeted ability that either bound hero receives also gets cast on the other hero. If the bind is broken before the duration expires, the initial target will be bound to its nearest allied hero in the radius.",
+    "grimstroke_ink_trail": "Adds an effect to Grimstroke's attacks that causes enemy heroes to leave a trail of ink behind them for 4s."
+  },
+  "npc_dota_hero_mars": {
+    "mars_spear": "Mars throws his legendary Spear with deadly precision, damaging each enemy unit it strikes. The first enemy hero it hits is skewered on the spear, pushing it back. If a skewered hero hits a tree, building, or cliff, they will be impaled to it and stunned.",
+    "mars_gods_rebuke": "Mars smashes enemies in front of him with his shield, knocking them back and damaging them with a critical hit based on his attack. Bonus damage is added when hitting heroes. Has True Strike.",
+    "mars_bulwark": "Mars wields his massive shield to block a portion of each physical attack when hit from the front or sides.\n\n Can be toggled, granting phased movement, removing Mars's ability to attack, and locking the direction he is facing. When active, reduces movement speed and re-directs 70% of the attack projectiles aimed at Mars's allies towards Mars instead.",
+    "mars_dauntless": "Mars gets more HP Regen the more he and his allies are outnumbered by enemy heroes in 700 radius.",
+    "mars_arena_of_blood": "After a short formation time, Mars summons an arena lined with the undead warriors of the Ash Legion, who block enemy attacks and movement. Enemy heroes near the inside edge of the arena will be attacked by spears, dealing damage and knocking them back."
+  },
+  "npc_dota_hero_void_spirit": {
+    "void_spirit_aether_remnant": "Void Spirit dispatches a remnant to the target location. The remnant stands watch over the region, facing the direction of his vector. When a unit crosses its gaze, the remnant pulls it in and damages it.",
+    "void_spirit_dissimilate": "Void Spirit temporarily fades into the aether, creating a number of portals through which he can reassemble himself. Upon exiting a portal, he damages all enemies in the area.",
+    "void_spirit_resonant_pulse": "Void Spirit wraps himself in a protective shield that absorbs physical damage and emits a single damaging pulse around him. The shield gains increased damage absorption for each enemy hero the pulse hits.",
+    "void_spirit_intrinsic_edge": "Void Spirit gains 25% more HP regen from Strength, armor from Agility, and mana regen and magic resistance from Intelligence.",
+    "void_spirit_astral_step": "Void Spirit tears a rift through the astral plane to appear at the target location, attacking all enemies along the path. This attack inflicts a void mark that slows for 1.25 seconds and then detonates."
+  },
+  "npc_dota_hero_snapfire": {
+    "snapfire_scatterblast": "Snapfire unloads with a wide blast that damages and slows enemies in a cone. Damage, Movement Slow, Attack Slow and Slow Duration are increased by 50% for enemies caught at point-blank range.",
+    "snapfire_firesnap_cookie": "Snapfire feeds a potent cookie to Mortimer or an ally, causing them to hop a short distance. The hopping unit stuns and damages enemies in the landing zone.",
+    "snapfire_lil_shredder": "Snapfire heats up her mounted turret to rapidly fire 5 attacks dealing fixed damage plus a percentage of her attack damage. Each attack reduces the enemy's armor. Provides bonus attack range for the duration.",
+    "snapfire_gobble_up": "Mortimer gobbles up a creep or an allied hero, which he can then spit towards enemies. The unit stays in his belly up to [object Object] seconds.",
+    "snapfire_spit_creep": "Mortimer spits out the unit that's in his mouth, causing impact damage and stun in a large area. The glob leaves a pool of firespit based on the current level of Mortimer Kisses, that slows and applies damage over time. Spit Out has a no minimum launch range.",
+    "snapfire_mortimer_kisses": "Snapfire's friend launches a barrage of firespit globs over 5.5 seconds. Globs cause impact damage and create pools of firespit, which slow and apply damage over time. Snapfire has a reduced turn rate for the duration and a minimum launch range of 600. Each glob can be targeted with a right click.",
+    "snapfire_buckshot": "When attacking enemy heroes, Snapfire deals 30% more damage with her auto attacks, but has a 25% chance of a glancing shot, dealing 60% damage."
+  },
+  "npc_dota_hero_hoodwink": {
+    "hoodwink_acorn_shot": "Fires Hoodwink's attack with an acorn at the target unit. The acorn bounces to nearby targets, slowing them and dealing a percentage of Hoodwink's attack with bonus damage.\nIf point targeted, a tree is created at the target position and the acorn will bounce to nearby targets. The ability may be placed on alt-cast to force this behavior.",
+    "hoodwink_bushwhack": "Tosses a net trap that stuns enemies if they are near a tree in the area. Affected enemies take damage over time and are pulled towards the tree nearest to them within the target area, and have their vision reduced to 0 for the duration of the stun.",
+    "hoodwink_scurry": "Hoodwink gains bonus movement speed, phased movement, and tree-walking for a brief time. All sources of evasion are doubled for the duration.",
+    "hoodwink_decoy": "Hoodwink turns invisible, increasing her movement speed, and creates a decoy illusion that starts aiming a decreased damage Sharpshooter at the nearest enemy hero. If the illusion is attacked or hit by a targeted ability, it is destroyed and it throws a lesser bushwhack towards the enemy.",
+    "hoodwink_hunters_boomerang": "Tosses a boomerang in an arc. Upon contact, it returns to Hoodwink. The boomerang will deal damage as it passes through or hits enemies, and apply a debuff that causes affected enemies to be slowed and be more vulnerable to spell damage.",
+    "hoodwink_sharpshooter": "Hoodwink charges up and fires a deadly bolt from her crossbow, dealing heavy damage, break and slow to an enemy Hero. The damage and debuff duration scale up to max after x0.75 seconds, and the bolt is fired automatically after x0.75 seconds.\nHoodwink is knocked backwards for a distance of 350 from the force of the shot. Creeps hit by the bolt are damaged for half the values.",
+    "hoodwink_sharpshooter_release": "Release the charged up shot, regain ability to move and attack."
+  },
+  "npc_dota_hero_dawnbreaker": {
+    "dawnbreaker_fire_wreath": "Dawnbreaker whirls her hammer around 3 times, damaging enemies with her attack plus bonus damage. On the final strike, she smashes her hammer down, stunning and damaging enemies in front of her.",
+    "dawnbreaker_celestial_hammer": "Dawnbreaker hurls her weapon at a target, damaging enemies struck along the way. The hammer pauses for 2 seconds at the destination before flying back to her, leaving a trail of fire that slows enemies. Dawnbreaker can recall the hammer at any time, pulling her towards it so they meet in the middle.",
+    "dawnbreaker_converge": "Dawnbreaker recalls her hammer, pulling them together so they meet in the middle.",
+    "dawnbreaker_break_of_dawn": "Whenever the sun comes out, Dawnbreaker gains bonus base damage and vision that decreases throughout the course of the day.",
+    "dawnbreaker_solar_guardian": "CHANNELED - Dawnbreaker creates a pulsing effect at a location within 350 units of an allied hero anywhere on the map, damaging enemies and healing allies with each pulse. After a short duration, she flies to the target location, dealing additional damage and stunning enemies upon landing. Once channeled, Dawnbreaker cannot stop the ability."
+  },
+  "npc_dota_hero_marci": {
+    "marci_grapple": "Marci grabs an allied or enemy target and throws it effortlessly behind her, damaging and slowing the unit if it's an enemy. Any enemy units in the landing area will also be damaged and slowed.",
+    "marci_companion_run": "Marci bounds to the targeted allied unit, choosing a direction and distance she will spring away from it. Upon reaching the unit, Marci lunges to her final destination, damaging and stunning enemies in a 275 radius where she lands.\n\n The ally receives 15% bonus movement speed for 4s.",
+    "marci_bodyguard": "Passively grants Marci lifesteal and bonus attack damage.\n\nMarci protects an allied hero. For 1s, the ally also gains 75% of lifesteal and attack damage bonus. Whenever the ally attacks or is attacked by an enemy, Marci counter-attacks that target if they are within her attack range plus 125.",
+    "marci_special_delivery": "Marci whistles to instantly summon her courier to her.\n\nPassively grants all allied couriers 3 bonus levels and 1 bonus health.",
+    "marci_unleash": "Marci taps a hidden power, gaining Fury charges that allow her to deliver a rapid sequence of strikes that slow movement and attack speed of the target for 2s. The last strike in every Fury combo creates a damaging pulse around the target. In between Fury combos, Marci is unable to attack for 1.5s.\n\nMarci gains 15% movement speed when Unleash is cast."
+  },
+  "npc_dota_hero_primal_beast": {
+    "primal_beast_onslaught": "Primal Beast charges up and then runs in the chosen direction, knocking back enemies and allies alike. Enemy units are damaged and stunned on impact. The longer the charge duration, the farther Primal Beast's momentum will carry him. \n\n Can be cancelled at any time with the Stop command.",
+    "primal_beast_trample": "Primal Beast stomps over everything. For every 140 units traveled, all enemies around the Beast receive damage. Deals base damage plus a multiplier of Primal Beast's attack damage. Primal Beast is disarmed for the duration of the ability.",
+    "primal_beast_uproar": "The Beast's temper causes every instance of 50 hero damage or more to grant a stack of Uproar. \n\n When activated, Primal Beast releases a roar that slows surrounding enemies and grants the Beast additional attack damage and armor for 7 seconds based on his current stacks of Uproar.",
+    "primal_beast_rock_throw": "Primal Beast throws a rock at the target location that stuns and damages enemies. The rock cannot be thrown within a minimum range of Primal Beast. After landing, the rock splits into 3 additional fragments that land behind the initial target location.\n\n Rock Throw increases stacks of Uproar for each hero hit.",
+    "primal_beast_onslaught_release": "Begins the rush to the specified location.",
+    "primal_beast_pulverize": "CHANNELED - Primal Beast channels his rage, grabbing the target enemy and slamming them into the ground repeatedly, damaging and mini-stunning any enemies caught in the AoE. Each consecutive hit deals bonus damage. Lasts 2.3 seconds."
+  },
+  "npc_dota_hero_muerta": {},
+  "npc_dota_hero_ringmaster": {
+    "ringmaster_tame_the_beasts": "CHANNELED - Ringmaster twirls his whip for up to 1 second then cracks it. Whipped enemies are damaged and flee in fear from Ringmaster. Channel time exponentially increases damage and extends the fear duration, but reduces the radius.",
+    "ringmaster_the_box": "Ringmaster packs himself or an allied hero into a mobile, extradimensional box. Boxed units gain phased movement, slow resistance, bonus magic resistance, and bonus movement speed. They are also untargetable, muted, silenced, and disarmed. The box will pop open after the effect expires or it moves more than 500 units away.",
+    "ringmaster_impalement": "Ringmaster throws one of his daggers to a precise point of his choosing. If he strikes an enemy, the dagger deals impact damage, briefly slows the unit hit, and causes them to bleed. The bleeding deals a percentage of the victim's maximum health in damage every second to heroes and flat damage per second to creeps.",
+    "ringmaster_empty_souvenir": "Gather souvenirs from kills and assists.",
+    "ringmaster_spotlight": "Ringmaster shines 3 spotlights that sweep over an area. Enemies in the light have a chance to miss their attacks and are revealed if invisible. Illusions hit by the beam fade away, losing a percentage of their maximum health each second. These effects linger for 0.3 seconds after leaving the light.",
+    "ringmaster_wheel": "Ringmaster rolls the Wheel of Wonder to the targeted location, knocking aside enemies along the way. After it reaches its target, enemies in range of the wheel take damage over time and are slowed by -50%.\n\nEnemy heroes who face the wheel for more than 0.5 seconds are mesmerized and drawn towards it. The first enemy to be mesmerized triggers a timer for the wheel to explode. If the timer is not triggered, it will automatically explode after 4 seconds.",
+    "ringmaster_tame_the_beasts_crack": "*CRACK*"
+  },
+  "npc_dota_hero_kez": {
+    "kez_echo_slash": "Kez slashes forward in a line with his Katana, attacking enemies in an area and applying a brief slow. After a short delay, the area is attacked again. Heroes take bonus damage.",
+    "kez_grappling_claw": "Kez swings on a grappling hook towards the target unit or tree. When the grappling hook collides with the target, that unit has slowed movement speed. Upon reaching the enemy target, Kez lands an attack on them.",
+    "kez_kazurai_katana": "Katana attacks and abilities apply a stacking damage over time to enemies that deals a percentage of the original attack's damage as additional damage over time. \n\nKez may activate the ability to impale the target with his attack, preventing them from moving or turning. The target's Katana debuff bursts, causing some of the stacks to deal damage instantly.",
+    "kez_switch_weapons": "Kez switches between his Kazurai Katana and Shodo Sai.\n\nHe gains different attack capabilities and abilities based on the weapon equipped. The abilities level up together, and when an ability is used, the associated alternate weapon ability also goes on cooldown.",
+    "kez_raptor_dance": "Kez enters into an uncontrollable state for 1 second, becoming invulnerable for 0.2s and receiving a basic dispel, remaining immune to magic damage for the remainder of the cast time and the duration of the slashes.\n\n If the cast completes successfully, Kez performs a series of deadly radial slashes around him that deal damage based on the max health of the target and heal Kez for a percentage of all damage dealt.",
+    "kez_falcon_rush": "Kez gains the ability to rush towards enemy targets to deliver echoing secondary attacks. While in this state, Kez has phased collision and slow resistance.",
+    "kez_talon_toss": "Kez throws a Sai at the target unit, applying a fixed damage attack and silence.",
+    "kez_shodo_sai": "Kez's attacks and abilities with the Sai have a chance to Mark enemies. The next attack or ability damage from Kez will stun the enemy and deal a critical strike, consuming the buff.\n\nKez may activate the ability to disarm himself, lock his facing, and parry attacks and attack effects from the targeted direction for 2 seconds. If an attack is parried from an enemy Hero in this way, that Hero is stunned and gains a stronger Mark that stuns for longer and deals 4% * Target Hero Level bonus critical strike.\n\nThe sub-ability may be used to cancel the blocking early.",
+    "kez_ravens_veil": "Kez releases a wave of smoke that applies his Mark to nearby enemies, briefly reducing their vision. Kez receives a basic dispel and gains bonus movement speed and invisibility until he attacks or casts a spell.",
+    "kez_shodo_sai_parry_cancel": "Stop blocking physical attacks."
+  },
+  "npc_dota_hero_largo": {
+    "largo_catchy_lick": "Largo licks the targeted unit with his tongue, pulling it back a short distance, applying a basic dispel, and dealing damage if it's an enemy.\n\nDispelling an effect from a target grants Largo temporary health regeneration.\n\nDISPEL TYPE: Basic Dispel",
+    "largo_frogstomp": "Largo tosses froglings to an area. They stomp the ground every 1 second, dealing damage and ministuns, and enemies in the area have reduced movement speed.",
+    "largo_croak_of_genius": "Largo strums a tune to a friendly hero. The hero's items and abilities have reduced mana cost and a percentage of their damage reverberates over the following 5 seconds. When an affected hero spends mana, the remaining buff duration is reduced by 0.5s.",
+    "largo_encore": "Buffs that Largo applies to himself or his team have extended duration.",
+    "largo_amphibian_rhapsody": "Largo gets ready to groove. He is disarmed and his ability bar switches to 3 song abilities, each with different effects. Songs are only effective if strummed on the beat.\n\nEvery time he strums successfully, he gains a stack of Groovin'. Each stack gives him bonus armor and reduces the mana cost of every song, but he loses a stack if he misses a beat. Stacks linger for a short duration when Largo's song ends.",
+    "largo_song_fight_song": "Largo plays a song that increases nearby allied heroes' spell amplification and grants their attacks additional magic damage.",
+    "largo_song_double_time": "Largo plays a song that increases nearby friendly units' movement speed and grants a brief slow resistance.",
+    "largo_song_good_vibrations": "Largo plays a song that heals nearby friendly heroes."
+  }
+}

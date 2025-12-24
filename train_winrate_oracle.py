@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import torch
 import random
@@ -8,10 +9,11 @@ import torch.optim as optim
 
 from tqdm import tqdm
 from datetime import datetime
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.raw_data import HERO_ID_FEATURE_MAP, HERO_ID_SEMANTIC_MAP
+from utils.get_data_cm_bp import fetch_high_mmr_matches
 from policy.bp_policy_module import *
 
 torch.random.manual_seed(42)
@@ -81,7 +83,7 @@ def train(load_model_path: str = None, epochs: int = 32):
     # 日志会保存在 ./runs 目录下，按时间戳区分实验
     log_dir = os.path.join("runs", "win_rate_exp_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
     writer = SummaryWriter(log_dir=log_dir)
-    print(f"TensorBoard 日志将保存至: {log_dir}")
+    print(f"[+] TensorBoard 日志将保存至: {log_dir}")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -90,7 +92,14 @@ def train(load_model_path: str = None, epochs: int = 32):
 
     model = WinRateOracle(embed_dim=32, nhead=4, num_layers=4, use_text=False).to(device)
     if load_model_path is not None and os.path.exists(load_model_path):
+        print(f"[+] 加载预训练模型 ...")
+        if found := re.findall(r'win_rate_oracle-(\d+)-(\d+)-(.+).pth$', load_model_path):
+            acc = float(found[0][-1])
+            print(f"[+] 初始准确率: {acc}")
         model.load_state_dict(torch.load(load_model_path))
+    else:
+        print(f"[+] 未加载预训练模型 ...")
+        acc = 0
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-4, steps_per_epoch=len(train_loader), epochs=epochs)
@@ -99,13 +108,14 @@ def train(load_model_path: str = None, epochs: int = 32):
 
     datetime_str = datetime.now().strftime("%Y%m%d%H%M%S")
     global_step = 0
+    print(f"[+] 训练开始 ...")
     for epoch in range(epochs):
         model.train()
         total_loss = 0
         correct = 0
         total_samples = 0
         
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", ncols=90)
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", ncols=160)
         
         for batch_idx, (r_ids, r_attrs, r_sem, d_ids, d_attrs, d_sem, labels) in enumerate(pbar):
             r_ids, r_attrs, r_sem = r_ids.to(device), r_attrs.to(device), r_sem.to(device)
@@ -142,14 +152,27 @@ def train(load_model_path: str = None, epochs: int = 32):
         writer.add_scalar('Epoch/Accuracy', avg_acc, epoch)
 
         # 保存模型
-        if not os.path.exists("./ckpts"): os.makedirs("./ckpts")
-        torch.save(model.state_dict(), f"./ckpts/win_rate_oracle-{datetime_str}-{epoch}-{avg_acc:.4f}.pth")
+        if not os.path.exists("./ckpts"):
+            os.makedirs("./ckpts")
+        if avg_acc > acc:
+            acc = avg_acc
+            epoch_str = str(epoch).rjust(len(str(epochs)), '0')
+            torch.save(model.state_dict(), f"./ckpts/win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth")
 
     # 4. 训练结束关闭 writer
     writer.close()
 
 if __name__ == "__main__":
+    print('='*20 + ' 更新比赛数据 ' + '='*20)
+    fetch_high_mmr_matches(
+        output_file='./data/high_mmr_cm_matches.json',
+        target_count=100000,
+        min_rank=50,
+        min_duration=18 * 60,
+    )
+
+    print('='*20 + ' 训练 WinRateOracle ' + '='*20)
     train(
-        load_model_path='./ckpts/win_rate_oracle-202512240314-48-0.6328.pth',
+        load_model_path='./ckpts/win_rate_oracle-20251224124156-013-0.7308.pth',
         epochs=128,
     )

@@ -3,6 +3,7 @@ import re
 import json
 import torch
 import random
+import pathlib
 
 import torch.nn as nn
 import torch.optim as optim
@@ -14,9 +15,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.raw_data import HERO_ID_FEATURE_MAP, HERO_ID_SEMANTIC_MAP
 from utils.get_data_cm_bp import fetch_high_mmr_matches
-from policy.bp_policy_module import *
+from model.win_rate_oracle import *
 
 torch.random.manual_seed(42)
+
+WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle"
+if not os.path.exists(WIN_RATE_ORACLE_SAVE_DIR):
+    pathlib.Path(WIN_RATE_ORACLE_SAVE_DIR).mkdir(parents=True, exist_ok=True)
 
 class DOTAMatchDataset(Dataset):
     @staticmethod
@@ -152,12 +157,10 @@ def train(load_model_path: str = None, epochs: int = 32):
         writer.add_scalar('Epoch/Accuracy', avg_acc, epoch)
 
         # 保存模型
-        if not os.path.exists("./ckpts"):
-            os.makedirs("./ckpts")
         if avg_acc > acc:
             acc = avg_acc
             epoch_str = str(epoch).rjust(len(str(epochs)), '0')
-            torch.save(model.state_dict(), f"./ckpts/win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth")
+            torch.save(model.state_dict(), os.path.join(WIN_RATE_ORACLE_SAVE_DIR, f"win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth"))
 
     # 4. 训练结束关闭 writer
     writer.close()
@@ -173,6 +176,6 @@ if __name__ == "__main__":
 
     print('='*20 + ' 训练 WinRateOracle ' + '='*20)
     train(
-        load_model_path='./ckpts/win_rate_oracle-20251224124156-013-0.7308.pth',
+        load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20251224124156-013-0.7308.pth'),
         epochs=128,
     )

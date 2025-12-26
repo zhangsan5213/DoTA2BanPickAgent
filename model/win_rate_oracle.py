@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 
-from model.hero_encoder import MultiModalHeroEncoder
+from model.hero_encoder import MultiModalHeroEncoder, NUM_HEROES, NUM_HERO_FEATURES
+from utils.raw_data import HERO_ID_FEATURE_MAP, HERO_ID_SEMANTIC_MAP
 
 # ==========================================
 # Value Network (Oracle - 胜率预测器)
@@ -47,6 +48,15 @@ class WinRateOracle(nn.Module):
             nn.Sigmoid()
         )
 
+        self.register_buffer("all_hero_attrs", torch.stack([
+            HERO_ID_FEATURE_MAP.get(hero_id, torch.zeros(NUM_HERO_FEATURES)).cuda()
+            for hero_id in range(1, NUM_HEROES + 1)
+        ]), persistent=False)
+        self.register_buffer("all_hero_sem", torch.stack([
+            HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024)).cuda()
+            for hero_id in range(1, NUM_HEROES + 1)
+        ]), persistent=False)
+
     def forward(self, radiant_hero_ids, radiant_hero_attrs, radiant_hero_semantics, dire_hero_ids, dire_hero_attrs, dire_hero_semantics):
         batch_size = radiant_hero_ids.shape[0]
         device = radiant_hero_ids.device
@@ -66,7 +76,7 @@ class WinRateOracle(nn.Module):
         
         # 3. 拼接并投影融合 [B, 5, embed_dim]
         # 这样模型能清晰地感知到：(英雄特征) + (所属阵营)
-        r_emb = self.team_fusion(torch.cat([r_emb, r_team_emb], dim=-1))
+        r_emb = self.team_fusion(torch.cat([r_emb, r_team_emb], dim=-1)) # TODO: Sizes of tensors must match except in dimension 2. Expected size 4 but got size 5 for tensor number 1 in the list.
         d_emb = self.team_fusion(torch.cat([d_emb, d_team_emb], dim=-1))
         
         # --- C. 构造输入序列 ---
@@ -79,3 +89,15 @@ class WinRateOracle(nn.Module):
         # --- E. 提取预测结果 ---
         cls_feature = out_seq[:, 0, :] 
         return self.head(cls_feature)
+
+    def hero_input_from_ids(self, hero_ids: torch.Tensor):
+        # 无需循环，直接利用 Tensor 索引 (极其快速)
+        ids_tensor = hero_ids.cuda()
+        attrs_tensor = self.all_hero_attrs[hero_ids] # 自动处理 [5] -> [5, F] 或 [B, 5] -> [B, 5, F]
+        sem_tensor = self.all_hero_sem[hero_ids]
+        return ids_tensor, attrs_tensor, sem_tensor
+
+    def predict(self, radiant_picks, dire_picks):
+        r_ids, r_attrs, r_sem = self.hero_input_from_ids(radiant_picks)
+        d_ids, d_attrs, d_sem = self.hero_input_from_ids(dire_picks)
+        return self.forward(r_ids, r_attrs, r_sem, d_ids, d_attrs, d_sem)

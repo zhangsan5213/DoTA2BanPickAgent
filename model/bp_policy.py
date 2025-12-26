@@ -2,35 +2,40 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch.distributions import Categorical
+from model.hero_encoder import NUM_HEROES
 
-from model.hero_encoder import NUM_HEROES, NUM_HERO_FEATURES, MultiModalHeroEncoder
-from model.win_rate_oracle import WinRateOracle
-
-# ==========================================
-# PPO Actor-Critic Decoder-only Network
-# ==========================================
-
-# --- RoPE 实现 ---
+# --- RoPE ---
 class RotaryEmbedding(nn.Module):
     def __init__(self, dim, max_seq_len=256):
         super().__init__()
+        # dim 应该是 head_dim
         inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
 
     def forward(self, seq_len, device):
+        # t: [seq_len]
         t = torch.arange(seq_len, device=device).type_as(self.inv_freq)
+        # freqs: [seq_len, dim/2]
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
-        return torch.cat((freqs, freqs), dim=-1)
+        # emb: [seq_len, dim]
+        emb = torch.cat((freqs, freqs), dim=-1)
+        return emb # 返回 cos 和 sin 的基础频率
 
 def rotate_half(x):
     x1, x2 = x.chunk(2, dim=-1)
     return torch.cat((-x2, x1), dim=-1)
 
 def apply_rotary_pos_emb(q, k, freqs):
-    freqs = freqs.unsqueeze(0).unsqueeze(0) # [1, 1, seq_len, dim]
-    return (q * freqs.cos()) + (rotate_half(q) * freqs.sin()), \
-           (k * freqs.cos()) + (rotate_half(k) * freqs.sin())
+    # freqs: [seq_len, head_dim] -> [1, seq_len, 1, head_dim]
+    # 调整维度以匹配 [B, L, H, D] 或 [B, H, L, D]
+    # 这里假设输入是 [B, H, L, D] (来自 RoPEMultiheadAttention)
+    freqs = freqs.unsqueeze(0).unsqueeze(0) 
+    # 计算 cos 和 sin
+    cos = freqs.cos()
+    sin = freqs.sin()
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
 
 # --- Transformer 组件 ---
 class RoPEMultiheadAttention(nn.Module):
@@ -39,21 +44,36 @@ class RoPEMultiheadAttention(nn.Module):
         self.embed_dim = embed_dim
         self.nhead = nhead
         self.head_dim = embed_dim // nhead
+        assert self.head_dim * nhead == embed_dim, "embed_dim must be divisible by nhead"
+        
         self.qkv = nn.Linear(embed_dim, embed_dim * 3)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, freqs, mask=None):
         B, L, E = x.shape
-        qkv = self.qkv(x).chunk(3, dim=-1)
-        q, k, v = map(lambda t: t.view(B, L, self.nhead, self.head_dim).transpose(1, 2), qkv)
+        # qkv: [B, L, 3*E] -> [B, L, 3, H, D]
+        qkv = self.qkv(x).view(B, L, 3, self.nhead, self.head_dim)
+        # 分离 q, k, v 并转置为 [B, H, L, D]
+        q, k, v = qkv.unbind(2)
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+
+        # 应用 RoPE
         q, k = apply_rotary_pos_emb(q, k, freqs)
         
-        attn = (q @ k.transpose(-2, -1)) * (self.head_dim ** -0.5)
-        if mask is not None:
-            attn = attn.masked_fill(mask == float('-inf'), float('-inf'))
-        attn = F.softmax(attn, dim=-1)
-        out = (self.dropout(attn) @ v).transpose(1, 2).reshape(B, L, E)
+        # Scaled Dot-Product Attention
+        # 使用 PyTorch 优化的算子
+        attn_output = F.scaled_dot_product_attention(
+            q, k, v, 
+            attn_mask=mask, 
+            dropout_p=self.dropout.p if self.training else 0,
+            is_causal=False # mask 已经在外部生成
+        )
+        
+        # 转换回 [B, L, E]
+        out = attn_output.transpose(1, 2).contiguous().view(B, L, E)
         return self.out_proj(out)
 
 class RoPETransformerBlock(nn.Module):
@@ -63,7 +83,7 @@ class RoPETransformerBlock(nn.Module):
         self.norm1 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, dim_feedforward),
-            nn.GELU(),
+            nn.SiLU(),
             nn.Linear(dim_feedforward, embed_dim),
             nn.Dropout(dropout)
         )
@@ -76,66 +96,69 @@ class RoPETransformerBlock(nn.Module):
 
 # --- Agent ---
 class PPODecoderAgent(nn.Module):
-    def __init__(self, embed_dim=256, nhead=8, num_layers=4):
+    def __init__(self, embed_dim=256, nhead=8, num_layers=4, dim_feedforward=1024):
         super().__init__()
         self.embed_dim = embed_dim
+        self.head_dim = embed_dim // nhead
         
-        # 统一的 Embedding 层或分开
+        # Embedding 层
         self.hero_embedding = nn.Embedding(NUM_HEROES + 1, embed_dim, padding_idx=0)
-        self.team_embedding = nn.Embedding(3, embed_dim) # 0:pad, 1:Radiant, 2:Dire
-        self.type_embedding = nn.Embedding(3, embed_dim) # 0:pad, 1:Ban, 2:Pick
+        self.team_embedding = nn.Embedding(3, embed_dim) 
+        self.type_embedding = nn.Embedding(3, embed_dim)
         
-        # 位置编码长度变为 24 * 3 = 72
-        self.pos_embedding = nn.Parameter(torch.zeros(1, 72, embed_dim))
+        # RoPE 模块
+        self.rope = RotaryEmbedding(self.head_dim)
         
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim, nhead=nhead, batch_first=True, activation='gelu'
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # 使用自定义的 RoPE Transformer 块
+        self.layers = nn.ModuleList([
+            RoPETransformerBlock(embed_dim, nhead, dim_feedforward)
+            for _ in range(num_layers)
+        ])
 
-        # Actor 负责从 Type Token 预测 Hero ID
         self.actor_head = nn.Linear(embed_dim, NUM_HEROES + 1)
-        # Critic 负责评估当前所有已输入 Token 代表的局面价值
-        self.critic_head = nn.Linear(embed_dim, 1)
+        self.critic_head = nn.Sequential(
+            nn.Linear(embed_dim, 256),
+            nn.SiLU(),
+            nn.Linear(256, 1),
+        )
 
     def _generate_causal_mask(self, sz, device):
-        mask = torch.triu(torch.ones(sz, sz, device=device) == 1).transpose(0, 1)
-        return mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        # PyTorch F.scaled_dot_product_attention 接受的布尔 mask 或 float mask
+        mask = torch.triu(torch.ones(sz, sz, device=device), diagonal=1).bool()
+        return mask # True 表示被屏蔽
 
     def forward(self, hero_seq, team_seq, type_seq):
-        """
-        hero_seq, team_seq, type_seq: [B, 24]
-        """
         B, L = hero_seq.size()
         device = hero_seq.device
         
-        # 1. 构造交错序列: [B, L, 3, E]
+        # 1. 构造交错序列 [B, L*3, E]
+        print(hero_seq.max())
         t_emb = self.team_embedding(team_seq)
         p_emb = self.type_embedding(type_seq)
         h_emb = self.hero_embedding(hero_seq)
         
-        # 重点：按照 [Team, Type, Hero] 顺序排列
-        # 维度变换: [B, L, E] -> [B, L, 1, E] -> 拼接为 [B, L, 3, E] -> 打平为 [B, L*3, E]
+        # 组合顺序 [Team_i, Type_i, Hero_i]
         combined = torch.stack([t_emb, p_emb, h_emb], dim=2) 
         x = combined.view(B, L * 3, self.embed_dim)
         
-        # 2. 加上位置编码
-        x = x + self.pos_embedding[:, :x.size(1), :]
+        # 2. 准备 RoPE 频率和 Mask
+        seq_len = x.size(1)
+        freqs = self.rope(seq_len, device)
+        mask = self._generate_causal_mask(seq_len, device)
         
-        # 3. Transformer 处理
-        mask = self._generate_causal_mask(x.size(1), device)
-        # out: [B, 72, E]
-        out = self.transformer(x, mask=mask)
+        # 3. 通过 Transformer Blocks
+        for layer in self.layers:
+            x = layer(x, freqs, mask)
         
         # 4. 提取输出
-        # 我们规定：在输入了 Team_k, Type_k 之后，预测 Hero_k
-        # 因此在打平的序列中，Type_k 的下标是 3*k + 1
-        # 我们取所有 3k+1 位置的特征来算 Actor Logits
-        type_indices = torch.arange(1, x.size(1), 3, device=device)
-        hero_logits = self.actor_head(out[:, type_indices, :]) # [B, 24, NUM_HEROES+1]
+        # Actor: 基于 Type Token (下标 3k+1) 预测 Hero
+        type_indices = torch.arange(1, seq_len, 3, device=device)
+        actor_features = x[:, type_indices, :]
+        hero_logits = self.actor_head(actor_features) 
         
-        # Critic 可以对每一步都产生一个价值，但我们通常取 Hero 选完后的时刻 (下标 3k+2)
-        hero_indices = torch.arange(2, x.size(1), 3, device=device)
-        values = self.critic_head(out[:, hero_indices, :]).squeeze(-1) # [B, 24]
+        # Critic: 基于 Hero Token (下标 3k+1) 评估当前局面
+        hero_indices = torch.arange(1, seq_len, 3, device=device)
+        critic_features = x[:, hero_indices, :]
+        values = self.critic_head(critic_features).squeeze(-1) 
         
         return hero_logits, values

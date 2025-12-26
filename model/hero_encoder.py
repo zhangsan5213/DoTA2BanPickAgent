@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 
-NUM_HEROES = 256  # 英雄个数，比真实的偏大
-NUM_HERO_FEATURES = 21  # 每个英雄的属性特征维度
+from utils.raw_data import NUM_HEROES, NUM_HERO_FEATURES
 
 # ==========================================
 # Hero Encoder

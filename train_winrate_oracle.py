@@ -176,6 +176,6 @@ if __name__ == "__main__":
 
     print('='*20 + ' 训练 WinRateOracle ' + '='*20)
     train(
-        load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20251224124156-013-0.7308.pth'),
+        load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20251224124558-126-0.8393.pth'),
         epochs=128,
     )

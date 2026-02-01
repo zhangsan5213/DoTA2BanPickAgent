@@ -132,7 +132,7 @@ class PPODecoderAgent(nn.Module):
         device = hero_seq.device
         
         # 1. 构造交错序列 [B, L*3, E]
-        print(hero_seq.max())
+
         t_emb = self.team_embedding(team_seq)
         p_emb = self.type_embedding(type_seq)
         h_emb = self.hero_embedding(hero_seq)
@@ -151,13 +151,15 @@ class PPODecoderAgent(nn.Module):
             x = layer(x, freqs, mask)
         
         # 4. 提取输出
-        # Actor: 基于 Type Token (下标 3k+1) 预测 Hero
+        # 序列结构: [Team_0, Type_0, Hero_0, Team_1, Type_1, Hero_1, ...]
+        # Actor: 基于 Type Token (下标 3k+1) 预测下一个 Hero
         type_indices = torch.arange(1, seq_len, 3, device=device)
         actor_features = x[:, type_indices, :]
         hero_logits = self.actor_head(actor_features) 
         
-        # Critic: 基于 Hero Token (下标 3k+1) 评估当前局面
-        hero_indices = torch.arange(1, seq_len, 3, device=device)
+        # Critic: 基于 Hero Token (下标 3k+2) 评估当前局面
+        # 注意：第0步的Hero是0(padding)，从第1步开始才有意义
+        hero_indices = torch.arange(2, seq_len, 3, device=device)
         critic_features = x[:, hero_indices, :]
         values = self.critic_head(critic_features).squeeze(-1) 
         

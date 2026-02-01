@@ -141,4 +141,4 @@ def fetch_high_mmr_matches(
 
 if __name__ == "__main__":
     # 替换为你自己的 API KEY 速度会快很多
-    fetch_high_mmr_matches(target_count=5000, api_key=None)
+    fetch_high_mmr_matches(target_count=1000, api_key=None)

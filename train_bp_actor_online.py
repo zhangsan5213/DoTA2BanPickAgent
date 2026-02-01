@@ -4,6 +4,7 @@ import json
 import torch
 import random
 import pathlib
+import glob
 
 import torch.nn as nn
 import torch.optim as optim
@@ -25,8 +26,20 @@ from model.bp_policy import PPODecoderAgent
 torch.random.manual_seed(42)
 
 BP_ACTOR_SAVE_DIR = "./ckpts/bp_actor"
+WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle"
 if not os.path.exists(BP_ACTOR_SAVE_DIR):
     pathlib.Path(BP_ACTOR_SAVE_DIR).mkdir(parents=True, exist_ok=True)
+
+
+def find_latest_oracle_model(save_dir: str = WIN_RATE_ORACLE_SAVE_DIR):
+    """从保存目录中找到最新的 WinRateOracle 模型"""
+    pattern = os.path.join(save_dir, "win_rate_oracle-*.pth")
+    model_files = glob.glob(pattern)
+    if not model_files:
+        return None
+    # 按修改时间排序，取最新的
+    model_files.sort(key=os.path.getmtime, reverse=True)
+    return model_files[0]
 
 # 标准 CM 模式序列 (Radiant=1, Dire=2; Ban=1, Pick=2)
 # 简化版示例（24步）：Ban(RDRDRDRD) -> Pick(RDDR) -> Ban(RDRDRD) -> Pick(DRDR) -> Ban(DR)
@@ -54,14 +67,76 @@ def get_combined_mask(hero_seq_so_far, device):
     return mask
 
 class BP_PPOTrainer_Online:
-    def __init__(self, agent: PPODecoderAgent, oracle: WinRateOracle, writer: SummaryWriter, lr=1e-4, gamma=0.99):
+    def __init__(self, agent: PPODecoderAgent, oracle: WinRateOracle, writer: SummaryWriter, 
+                 lr=1e-4, gamma=0.99, weight_decay=0.01, gamma_pretrain=0.95):
         self.agent = agent
         self.oracle = oracle
-        self.optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
+        # 使用 AdamW 优化器，与 train_winrate_oracle.py 保持一致
+        self.optimizer = torch.optim.AdamW(agent.parameters(), lr=lr, weight_decay=weight_decay)
         self.writer = writer
         self.gamma = gamma
+        self.gamma_pretrain = gamma_pretrain  # Critic 预训练用的 gamma
         self.eps_clip = 0.2
-        self.ent_coef = 0.02 # 在线学习需要更强的探索
+        self.ent_coef = 0.02  # 在线学习需要更强的探索
+        self.global_step = 0
+        
+    def pretrain_critic_step(self, batch_size=128):
+        """
+        在线收集轨迹并预训练 Critic（类似 offline 的 train_step_critic_pretrain）
+        """
+        device = next(self.agent.parameters()).device
+        self.agent.eval()
+        
+        team_seq = CM_TEAM_SEQ.repeat(batch_size, 1).to(device)
+        type_seq = CM_TYPE_SEQ.repeat(batch_size, 1).to(device)
+        
+        obs_hero_seq = torch.zeros(batch_size, 24, dtype=torch.long).to(device)
+        
+        # 1. 在线收集轨迹（仅用于生成最终阵容，不涉及梯度）
+        with torch.no_grad():
+            for t in range(24):
+                logits, _ = self.agent(obs_hero_seq, team_seq, type_seq)
+                step_logits = logits[:, t, :]
+                
+                # 应用掩码
+                current_mask = get_combined_mask(obs_hero_seq[:, :t], device)
+                masked_logits = step_logits + current_mask
+                
+                # 采样
+                dist = Categorical(logits=masked_logits)
+                action = dist.sample()
+                obs_hero_seq[:, t] = action
+        
+        # 2. 提取 pick 并计算最终奖励
+        r_picks, d_picks = self.extract_picks(obs_hero_seq, team_seq, type_seq)
+        with torch.no_grad():
+            win_prob = self.oracle.predict(r_picks, d_picks, return_tensor=True)
+            final_rewards = (win_prob.squeeze(-1) - 0.5) * 2  # [B], 范围 [-1, 1]
+        
+        # 3. 计算 Critic 当前预测值
+        self.agent.train()
+        _, curr_values = self.agent(obs_hero_seq, team_seq, type_seq)  # [B, 24]
+        
+        # 4. 构造指数衰减目标 (与 offline 一致)
+        T = 24
+        steps = torch.arange(T, device=device).float()  # [0, 1, ..., 23]
+        weights = self.gamma_pretrain ** (T - 1 - steps)  # [24]
+        targets = final_rewards.unsqueeze(1) * weights.unsqueeze(0)  # [B, 24]
+        
+        # 5. 计算 MSE Loss
+        loss = F.mse_loss(curr_values, targets)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self.agent.parameters(), 0.5)
+        self.optimizer.step()
+        
+        # 记录到 TensorBoard
+        self.writer.add_scalar('Pretrain/Critic Loss', loss.item(), self.global_step)
+        self.writer.add_scalar('Pretrain/Final Reward Avg', final_rewards.mean().item(), self.global_step)
+        self.global_step += 1
+        
+        return loss.item()
 
     def collect_trajectories(self, batch_size=64):
         device = next(self.agent.parameters()).device
@@ -101,8 +176,9 @@ class BP_PPOTrainer_Online:
         # 提取 pick 的英雄用于 Oracle
         r_picks, d_picks = self.extract_picks(obs_hero_seq, team_seq, type_seq)
         with torch.no_grad():
-            win_prob = self.oracle.predict(r_picks, d_picks)
-            final_rewards = (win_prob - 0.5) * 2 # [B]
+            # 使用 return_tensor=True 获取 tensor 形式的预测结果
+            win_prob = self.oracle.predict(r_picks, d_picks, return_tensor=True)
+            final_rewards = (win_prob.squeeze(-1) - 0.5) * 2  # [B]
             
         return {
             "hero_seq": obs_hero_seq,
@@ -127,7 +203,7 @@ class BP_PPOTrainer_Online:
             d_picks.append(dp[:5])
         return torch.stack(r_picks), torch.stack(d_picks)
 
-    def train_online_step(self, batch_size=128, ppo_epochs=4, global_step=0):
+    def train_online_step(self, batch_size=128, ppo_epochs=4):
         # 1. 在线采样
         data = self.collect_trajectories(batch_size)
         hero_seq = data['hero_seq']
@@ -151,18 +227,21 @@ class BP_PPOTrainer_Online:
 
         # 3. PPO 更新
         self.agent.train()
+        device = hero_seq.device
         for _ in range(ppo_epochs):
             curr_logits, curr_values = self.agent(hero_seq, team_seq, type_seq)
             
-            # 重新计算 log_prob (注意 Mask 必须一致)
-            # 为了简单，直接对全量 hero_seq 算 log_prob
+            # 重新计算 log_prob (必须使用与采样时一致的 Mask)
             new_log_probs = []
+            entropies = []
             for t in range(24):
                 mask_t = get_combined_mask(hero_seq[:, :t], device)
                 dist_t = Categorical(logits=curr_logits[:, t, :] + mask_t)
                 new_log_probs.append(dist_t.log_prob(hero_seq[:, t]))
+                entropies.append(dist_t.entropy())
             
             curr_log_probs = torch.stack(new_log_probs, dim=1)
+            entropy = torch.stack(entropies, dim=1).mean()
             
             ratio = torch.exp(curr_log_probs - old_log_probs)
             
@@ -175,7 +254,7 @@ class BP_PPOTrainer_Online:
             
             actor_loss = -torch.min(surr1, surr2).mean()
             critic_loss = F.mse_loss(curr_values, td_targets.detach())
-            entropy_loss = -dist.entropy().mean()
+            entropy_loss = -entropy  # 最大化熵 -> 最小化负熵
             
             total_loss = actor_loss + 0.5 * critic_loss + self.ent_coef * entropy_loss
             
@@ -184,33 +263,91 @@ class BP_PPOTrainer_Online:
             nn.utils.clip_grad_norm_(self.agent.parameters(), 0.5)
             self.optimizer.step()
 
-        # Log
-        self.writer.add_scalar('Online/Final_Win_Prob_Avg', (final_rewards.mean()+1)/2, global_step)
+        # Log - 增强 TensorBoard 记录，与离线训练一致
+        self.writer.add_scalar('Train/Actor Loss', actor_loss.item(), self.global_step)
+        self.writer.add_scalar('Train/Critic Loss', critic_loss.item(), self.global_step)
+        self.writer.add_scalar('Train/Total Loss', total_loss.item(), self.global_step)
+        self.writer.add_scalar('Train/Entropy', entropy.item(), self.global_step)
+        self.writer.add_scalar('Online/Final_Win_Prob_Avg', (final_rewards.mean()+1)/2, self.global_step)
+        self.global_step += 1
         return actor_loss.item(), critic_loss.item()
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    oracle = WinRateOracle(embed_dim=32, nhead=4, num_layers=4, use_text=False).to(device)
-    oracle.load_state_dict(torch.load("./ckpts/win_rate_oracle/win_rate_oracle-20251225233207-050-0.8595.pth"))
-    agent = PPODecoderAgent(embed_dim=32, nhead=4, num_layers=4, dim_feedforward=64).to(device)
-
-    log_dir = os.path.join("runs", "bp_ppo_agent_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
-    writer = SummaryWriter(log_dir=log_dir)
-    epochs_critic_pretrain = 2
-    epochs_together = 1280
-    trainer = BP_PPOTrainer_Online(agent, oracle, writer)
+    print(f"[*] Using device: {device}")
     
-    print(">>> Starting Online Self-Play Training...")
-    global_step = 0
+    # 自动加载最新的 Oracle 模型
+    oracle_model_path = find_latest_oracle_model()
+    if oracle_model_path is None:
+        raise FileNotFoundError(f"No WinRateOracle model found in {WIN_RATE_ORACLE_SAVE_DIR}")
+    print(f"[*] Loading Oracle from: {oracle_model_path}")
+    
+    # 使用与 train_winrate_oracle.py 一致的模型参数
+    oracle = WinRateOracle(
+        embed_dim=64, 
+        nhead=4, 
+        num_layers=4, 
+        use_text=False, 
+        use_player_heroes=True,
+        # HeroEncoder 参数
+        hero_encoder_id_dim=128,
+        hero_encoder_attr_dim=64,
+        hero_encoder_text_dim=128,
+        hero_encoder_dropout=0.1,
+        hero_encoder_res_layers=3,
+        hero_encoder_attn_heads=4,
+        hero_encoder_modality_dropout=0.1,
+    ).to(device)
+    
+    oracle.load_state_dict(torch.load(oracle_model_path, map_location=device))
+    oracle.eval()  # 设置为评估模式
+    print("[*] Oracle loaded successfully")
+    
+    # 创建 PPO Agent
+    agent = PPODecoderAgent(embed_dim=32, nhead=4, num_layers=4, dim_feedforward=64).to(device)
+    print(f"[*] Agent parameters: {sum(p.numel() for p in agent.parameters()):,}")
+
+    log_dir = os.path.join("runs", "bp_ppo_agent_online_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    writer = SummaryWriter(log_dir=log_dir)
+    print(f"[*] TensorBoard logs: {log_dir}")
+    
+    # 创建训练器，使用 AdamW 和 weight_decay
+    trainer = BP_PPOTrainer_Online(agent, oracle, writer, lr=1e-4, weight_decay=0.01)
+    
+    # ========== Stage 1: Critic 预训练 ==========
+    print(">>> Stage 1: Pre-training Critic with Online Trajectories...")
+    pretrain_episodes = 200  # 预训练步数
+    pbar_pretrain = tqdm(range(pretrain_episodes), desc="Critic Pretrain")
+    for _ in pbar_pretrain:
+        critic_loss = trainer.pretrain_critic_step(batch_size=128)
+        pbar_pretrain.set_postfix({"Critic loss": f"{critic_loss:.4f}"})
+    
+    # 重置 global_step 用于正式训练记录
+    trainer.global_step = 0
+    
+    # ========== Stage 2: 正式在线 PPO 训练 ==========
+    print(">>> Stage 2: Online Self-Play Training...")
     num_episodes = 10000 
+    best_loss = float('inf')
     
     pbar = tqdm(range(num_episodes), desc="Online Training")
     for epoch in pbar:
-        a_loss, c_loss = trainer.train_online_step(batch_size=128, global_step=global_step)
-        global_step += 1
+        a_loss, c_loss = trainer.train_online_step(batch_size=128)
 
         if epoch % 10 == 0:
             pbar.set_postfix({"Actor": f"{a_loss:.3f}", "Critic": f"{c_loss:.3f}"})
         
+        # 保存最佳模型（基于总损失）
         if epoch % 100 == 0:
-            torch.save(agent.state_dict(), f"{BP_ACTOR_SAVE_DIR}/online_agent_latest.pth")
+            total_loss = a_loss + c_loss
+            if total_loss < best_loss:
+                best_loss = total_loss
+                datetime_str = datetime.now().strftime("%Y%m%d%H%M%S")
+                save_path = os.path.join(BP_ACTOR_SAVE_DIR, f"bp_actor_online-{datetime_str}-{epoch:05d}-{total_loss:.4f}.pth")
+                torch.save(agent.state_dict(), save_path)
+                print(f"[*] Saved best model to: {save_path}")
+            # 同时保存一个 latest 版本
+            torch.save(agent.state_dict(), os.path.join(BP_ACTOR_SAVE_DIR, "online_agent_latest.pth"))
+    
+    writer.close()
+    print(">>> Training completed!")

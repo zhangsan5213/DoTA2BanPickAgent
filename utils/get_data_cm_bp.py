@@ -57,7 +57,7 @@ def fetch_high_mmr_matches(
     output_file='./data/high_mmr_with_stats.json',
     target_count=1000, # 演示建议先设小一点
     min_rank=50,
-    min_duration=20 * 60,
+    min_duration=15 * 60,
     api_key=None
 ):
     all_data = []
@@ -141,4 +141,10 @@ def fetch_high_mmr_matches(
 
 if __name__ == "__main__":
     # 替换为你自己的 API KEY 速度会快很多
-    fetch_high_mmr_matches(target_count=5000, api_key=None)
+    fetch_high_mmr_matches(
+        output_file='./data/high_mmr_with_stats-rank_40-duration_15.json',
+        target_count=10000,
+        min_rank=40,
+        min_duration=15*60,
+        api_key=None,
+    )

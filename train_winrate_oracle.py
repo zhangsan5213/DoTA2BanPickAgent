@@ -1,4 +1,6 @@
 import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import re
 import json
 import torch
@@ -19,7 +21,7 @@ from model.win_rate_oracle import *
 
 torch.random.manual_seed(42)
 
-WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle"
+WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle-num_heroes_160"
 if not os.path.exists(WIN_RATE_ORACLE_SAVE_DIR):
     pathlib.Path(WIN_RATE_ORACLE_SAVE_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -113,7 +115,7 @@ class DOTAMatchDataset(Dataset):
                  min_total_games=10, use_data_augmentation=True):
         """
         Args:
-            json_path: high_mmr_with_stats.json 路径
+            json_path: high_mmr_with_stats-rank_40-duration_15.json 路径
             HERO_ID_FEATURE_MAP: 英雄属性映射
             HERO_ID_SEMANTIC_MAP: 英雄语义嵌入映射
             min_total_games: 玩家最少总场次阈值
@@ -145,14 +147,13 @@ class DOTAMatchDataset(Dataset):
                 dire_players, min_total_games=min_total_games
             )
             
-            # 检查是否有足够数量的有效玩家（可选：跳过玩家数据不足的比赛）
-            # 这里改为保留所有比赛，玩家数据不足时用全0向量表示
+            # 检查是否有足够数量的有效玩家，剔除玩家数据不足的比赛
             has_valid_r_players = any(sum(1 for v in vec if v > 0) > 0 for vec in r_player_feats)
             has_valid_d_players = any(sum(1 for v in vec if v > 0) > 0 for vec in d_player_feats)
             
             if not (has_valid_r_players and has_valid_d_players):
                 skipped_count += 1
-                # 继续保留这场比赛，只是玩家特征为0
+                continue  # 跳过玩家数据不足的比赛
             
             label = 1.0 if m.get('radiant_win', False) else 0.0
             
@@ -162,7 +163,6 @@ class DOTAMatchDataset(Dataset):
                 'd_ids': d_ids,
                 'r_player_feats': r_player_feats,
                 'd_player_feats': d_player_feats,
-                'has_valid_player_data': has_valid_r_players and has_valid_d_players,
                 'label': label
             })
             
@@ -173,19 +173,15 @@ class DOTAMatchDataset(Dataset):
                     'd_ids': r_ids,
                     'r_player_feats': d_player_feats,
                     'd_player_feats': r_player_feats,
-                    'has_valid_player_data': has_valid_r_players and has_valid_d_players,
                     'label': 1.0 - label
                 })
         
         if invalid_team_count > 0:
             print(f"[*] 跳过了 {invalid_team_count} 场队伍不完整(pick≠5)的比赛")
         if skipped_count > 0:
-            print(f"[*] 警告: {skipped_count} 场比赛玩家数据不足（将使用零向量）")
+            print(f"[*] 跳过了 {skipped_count} 场玩家数据不足的比赛")
         
-        # 统计有有效玩家数据的比赛比例
-        has_data_count = sum(1 for m in self.matches if m['has_valid_player_data'])
         print(f"[*] 数据集大小: {len(self.matches)} {'(双向增强后)' if use_data_augmentation else ''}")
-        print(f"[*] 有有效玩家数据的比赛: {has_data_count}/{len(self.matches)} ({100*has_data_count/len(self.matches):.1f}%)")
         
         self.HERO_ID_FEATURE_MAP = HERO_ID_FEATURE_MAP
         self.HERO_ID_SEMANTIC_MAP = HERO_ID_SEMANTIC_MAP
@@ -227,7 +223,7 @@ def train(load_model_path: str = None, epochs: int = 32):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataset = DOTAMatchDataset(
-        "./data/high_mmr_with_stats.json",  # 使用新的合并数据文件
+        "./data/high_mmr_with_stats-rank_40-duration_15.json",  # 使用新的合并数据文件
         HERO_ID_FEATURE_MAP, 
         HERO_ID_SEMANTIC_MAP,
         min_total_games=10,  # 玩家最少总场次阈值
@@ -311,7 +307,7 @@ def train(load_model_path: str = None, epochs: int = 32):
         writer.add_scalar('Epoch/Accuracy', avg_acc, epoch)
 
         # 保存模型
-        if avg_acc > acc:
+        if avg_acc > 0.95:  # 只保存准确率超过95%的模型
             acc = avg_acc
             epoch_str = str(epoch).rjust(len(str(epochs)), '0')
             torch.save(model.state_dict(), os.path.join(WIN_RATE_ORACLE_SAVE_DIR, f"win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth"))
@@ -320,16 +316,16 @@ def train(load_model_path: str = None, epochs: int = 32):
     writer.close()
 
 if __name__ == "__main__":
-    print('='*20 + ' 更新比赛数据 ' + '='*20)
-    fetch_high_mmr_matches(
-        output_file='./data/high_mmr_with_stats.json',  # 使用合并后的数据文件
-        target_count=100000,
-        min_rank=50,
-        min_duration=18 * 60,
-    )
+    # print('='*20 + ' 更新比赛数据 ' + '='*20)
+    # fetch_high_mmr_matches(
+    #     output_file='./data/high_mmr_with_stats-rank_40-duration_15.json',  # 使用合并后的数据文件
+    #     target_count=100000,
+    #     min_rank=40,
+    #     min_duration=15 * 60,
+    # )
 
     print('='*20 + ' 训练 WinRateOracle ' + '='*20)
     train(
-        # load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20251225233207-050-0.8595.pth'),
+        # load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20260203224235-096-0.9865.pth'),
         epochs=128,
     )

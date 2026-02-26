@@ -171,10 +171,10 @@ class WinRateOracle(nn.Module):
     ):
         """
         Args:
-            radiant_hero_ids: [B, 5] 天辉英雄ID
+            radiant_hero_ids: [B, 5] 天辉英雄ID (0-based, 0-159)
             radiant_hero_attrs: [B, 5, NUM_HERO_FEATURES] 天辉英雄属性
             radiant_hero_semantics: [B, 5, text_dim] 天辉英雄语义
-            dire_hero_ids: [B, 5] 夜魇英雄ID
+            dire_hero_ids: [B, 5] 夜魇英雄ID (0-based, 0-159)
             dire_hero_attrs: [B, 5, NUM_HERO_FEATURES] 夜魇英雄属性
             dire_hero_semantics: [B, 5, text_dim] 夜魇英雄语义
             radiant_player_feats: [B, 5, NUM_HEROES] 天辉玩家英雄偏好（可选）
@@ -186,6 +186,7 @@ class WinRateOracle(nn.Module):
         device = radiant_hero_ids.device
         
         # --- A. 编码阶段 ---
+        # hero_encoder 需要 0-based indices (0-159)
         r_emb = self.hero_encoder(radiant_hero_ids, radiant_hero_attrs, radiant_hero_semantics)
         d_emb = self.hero_encoder(dire_hero_ids, dire_hero_attrs, dire_hero_semantics)
         
@@ -213,10 +214,12 @@ class WinRateOracle(nn.Module):
         cls_feature = out_seq[:, 0, :]  # [B, embed_dim]
         
         # --- F. 融合玩家特征 ---
-        if self.use_player_heroes and radiant_player_feats is not None and dire_player_feats is not None:
+        if self.use_player_heroes:
+            assert radiant_player_feats is not None and dire_player_feats is not None, \
+                "use_player_heroes=True 时必须提供 player_feats"
             r_player_feat = self.player_encoder(radiant_player_feats)  # [B, embed_dim]
             d_player_feat = self.player_encoder(dire_player_feats)     # [B, embed_dim]
-            # 拼接所有特征
+            # 拼接所有特征 [B, embed_dim * 3]
             combined_feat = torch.cat([cls_feature, r_player_feat, d_player_feat], dim=-1)
         else:
             combined_feat = cls_feature
@@ -228,20 +231,20 @@ class WinRateOracle(nn.Module):
         根据英雄ID快速获取预计算的属性和语义特征
         
         Args:
-            hero_ids: [5] 或 [B, 5] 英雄ID（注意：ID从1开始，0表示无效）
+            hero_ids: [5] 或 [B, 5] 英雄ID（1-based, 1-160；0表示无效/padding）
         Returns:
-            ids: 处理后的英雄ID
+            indices: 0-based 索引 (0-159)，用于传入 hero_encoder
             attrs: 英雄属性 [5, F] 或 [B, 5, F]
             sem: 英雄语义 [5, S] 或 [B, 5, S]
         """
         # 确保在正确设备上
         device = hero_ids.device
         
-        # 处理ID：减1转为0-based索引（因为预计算buffer是0-based）
-        # hero_ids: 1-256 -> indices: 0-255
+        # 处理ID：减1转为0-based索引（因为预计算buffer和embedding都是0-based）
+        # hero_ids: 1-160 -> indices: 0-159
         indices = hero_ids - 1
         
-        # 处理边界：确保索引在有效范围内
+        # 处理边界：确保索引在有效范围内 [0, NUM_HEROES-1]
         indices = torch.clamp(indices, min=0, max=NUM_HEROES - 1)
         
         # 获取属性 [5, F] 或 [B, 5, F]
@@ -253,7 +256,8 @@ class WinRateOracle(nn.Module):
         else:
             sem = None
         
-        return hero_ids, attrs, sem
+        # 返回 0-based indices，保持与 hero_encoder 的输入一致
+        return indices, attrs, sem
 
     def predict(
         self, 
@@ -277,11 +281,18 @@ class WinRateOracle(nn.Module):
         """
         self.eval()
         
+        # 获取模型所在设备
+        device = next(self.parameters()).device
+        
         # 处理英雄ID输入
         if not isinstance(radiant_picks, torch.Tensor):
-            radiant_picks = torch.tensor(radiant_picks, dtype=torch.long)
+            radiant_picks = torch.tensor(radiant_picks, dtype=torch.long, device=device)
+        else:
+            radiant_picks = radiant_picks.to(device)
         if not isinstance(dire_picks, torch.Tensor):
-            dire_picks = torch.tensor(dire_picks, dtype=torch.long)
+            dire_picks = torch.tensor(dire_picks, dtype=torch.long, device=device)
+        else:
+            dire_picks = dire_picks.to(device)
         
         # 确保batch维度
         if radiant_picks.dim() == 1:
@@ -294,8 +305,8 @@ class WinRateOracle(nn.Module):
         d_ids, d_attrs, d_sem = self.hero_input_from_ids(dire_picks)
         
         # 处理玩家特征
-        r_player = self._process_player_feats(radiant_player_feats)
-        d_player = self._process_player_feats(dire_player_feats)
+        r_player = self._process_player_feats(radiant_player_feats, device)
+        d_player = self._process_player_feats(dire_player_feats, device)
         
         # 前向传播
         with torch.no_grad():
@@ -309,21 +320,27 @@ class WinRateOracle(nn.Module):
             return pred
         return pred.cpu().numpy()
 
-    def _process_player_feats(self, player_feats):
+    def _process_player_feats(self, player_feats, device=None):
         """
         统一处理玩家胜率特征
         
         Args:
             player_feats: None / list[list[float]] / tensor [5, NUM_HEROES]
                           每个元素表示该玩家使用对应英雄的胜率 (0-1)
+            device: 目标设备，如果为None则使用CPU
         Returns:
             tensor [1, 5, NUM_HEROES] 或 None
         """
         if player_feats is None:
             return None
         
+        if device is None:
+            device = torch.device('cpu')
+        
         if not isinstance(player_feats, torch.Tensor):
-            player_feats = torch.tensor(player_feats, dtype=torch.float32)
+            player_feats = torch.tensor(player_feats, dtype=torch.float32, device=device)
+        else:
+            player_feats = player_feats.to(device)
         
         if player_feats.dim() == 2:
             # [5, NUM_HEROES] -> [1, 5, NUM_HEROES]

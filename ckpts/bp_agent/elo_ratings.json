@@ -1,0 +1,16 @@
+{
+  "ratings": {
+    "./ckpts/bp_agent\\bp_agent-20260226235636-160.pth": 1491.28025745523,
+    "./ckpts/bp_agent\\bp_agent-20260227000616-160.pth": 1477.8532553431578,
+    "./ckpts/bp_agent\\bp_agent-20260227001342-320.pth": 1508.668814473611,
+    "./ckpts/bp_agent\\bp_agent-20260227002142-480.pth": 1522.1976727280012,
+    "./ckpts/bp_agent\\bp_agent-20260227002941-640.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227003742-800.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227004537-960.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227005239-1120.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227005939-1280.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227010638-1440.pth": 1500.0,
+    "./ckpts/bp_agent\\bp_agent-20260227011454-128.pth": 1500.0
+  },
+  "last_updated": "2026-02-27T02:33:17.464417"
+}

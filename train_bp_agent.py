@@ -102,7 +102,6 @@ class Config:
     PLAYER_SAMPLER_RANDOMNESS = 0.2  # 采样器 randomness
     
     # ELO 评估配置
-    ELO_EVAL_INTERVAL = 8  # 每多少个checkpoint进行一次ELO评估
     ELO_N_OPPONENTS = 8    # 评估时选择的对手数
     ELO_N_GAMES = 4        # 每个对手对战局数
     ELO_JSON_PATH = "./ckpts/bp_agent/elo_ratings.json"  # ELO记录文件
@@ -1136,25 +1135,20 @@ def main():
     
     # 找出没有ELO记录的新checkpoint
     new_checkpoints = [ckpt for ckpt in existing_checkpoints if ckpt not in elo_ratings]
-    for ckpt in new_checkpoints:
-        elo_ratings[ckpt] = 1500.0  # 新ckpt初始ELO
     
-    # 如果新checkpoint足够多，让它们和已有ckpt互相PK计算ELO
-    if len(new_checkpoints) >= Config.ELO_N_OPPONENTS // 2:
-        print(f"[*] 发现 {len(new_checkpoints)} 个新checkpoint，进行ELO评估...")
-        # 选择部分新ckpt和部分已有ckpt（如果有）
-        all_ckpts = list(elo_ratings.keys())
-        if len(all_ckpts) > Config.ELO_N_OPPONENTS:
-            # 优先选新ckpt，再随机选旧的补齐
-            selected_new = new_checkpoints[:Config.ELO_N_OPPONENTS // 2]
-            remaining_slots = Config.ELO_N_OPPONENTS - len(selected_new)
-            old_ckpts = [c for c in all_ckpts if c not in new_checkpoints]
-            selected_old = random.sample(old_ckpts, min(remaining_slots, len(old_ckpts))) if old_ckpts else []
-            selected_ckpts = selected_new + selected_old
-        else:
-            selected_ckpts = all_ckpts
+    # 如果有新ckpt，初始化ELO并通过对战定分
+    if new_checkpoints:
+        print(f"[*] 发现 {len(new_checkpoints)} 个新checkpoint需要ELO定分...")
+        for ckpt in new_checkpoints:
+            elo_ratings[ckpt] = 1500.0
+        
+        # 选择用于定分的ckpt集合（新ckpt + 部分已有ckpt）
+        old_ckpts = [c for c in elo_ratings.keys() if c not in new_checkpoints]
+        selected_old = random.sample(old_ckpts, min(Config.ELO_N_OPPONENTS, len(old_ckpts))) if old_ckpts else []
+        selected_ckpts = new_checkpoints + selected_old
         
         # 让它们互相PK更新ELO
+        print(f"[*] ELO定分: {len(new_checkpoints)} 新ckpt + {len(selected_old)} 旧ckpt 互相PK...")
         for i, ckpt_a in enumerate(selected_ckpts):
             agent_a = BPAgent(
                 embed_dim=Config.EMBED_DIM, nhead=Config.NHEAD, num_layers=Config.NUM_LAYERS,
@@ -1186,6 +1180,7 @@ def main():
         # 保存ELO记录
         with open(Config.ELO_JSON_PATH, 'w') as f:
             json.dump({'ratings': elo_ratings, 'last_updated': datetime.now().isoformat()}, f, indent=2)
+        print(f"[*] ELO定分完成，已保存到 {Config.ELO_JSON_PATH}")
     
     # 选择ELO最高的checkpoint加载（从已有ELO记录中选择）
     saved_checkpoints = []  # 本次训练保存的checkpoint
@@ -1239,26 +1234,54 @@ def main():
                     if prev_ckpt in elo_ratings:
                         elo_ratings[ckpt_path] = elo_ratings[prev_ckpt]
                     else:
-                        # 如果前一个不在，用1500
                         elo_ratings[ckpt_path] = 1500.0
                 
-                # 每ELO_EVAL_INTERVAL个checkpoint进行一次ELO评估
-                if len(saved_checkpoints) % Config.ELO_EVAL_INTERVAL == 0 and len(saved_checkpoints) > 1:
-                    agent.eval()
-                    current_elo = evaluate_elo_rating(
-                        agent, oracle, saved_checkpoints, elo_ratings,
-                        matches_data, player_sampler, device, n_games_per_opponent=Config.ELO_N_GAMES
-                    )
-                    agent.train()
-                    writer.add_scalar('Elo/Rating', current_elo, global_step)
-                    # 也记录所有checkpoint的平均ELO
-                    avg_elo = sum(elo_ratings.values()) / len(elo_ratings)
-                    writer.add_scalar('Elo/AverageRating', avg_elo, global_step)
-                    print(f"[*] ELO评分: 当前={current_elo:.1f}, 平均={avg_elo:.1f}")
+                # 每次保存都进行ELO定级：与随机选择的对手PK
+                print(f"[*] 新checkpoint ELO定级中...")
+                agent.eval()
+                
+                # 选择对手（从历史ckpt中随机选）
+                all_historical = [c for c in elo_ratings.keys() if c != ckpt_path]
+                if all_historical:
+                    n_opp = min(Config.ELO_N_OPPONENTS, len(all_historical))
+                    opponents = random.sample(all_historical, n_opp)
                     
-                    # 保存ELO记录到JSON
-                    with open(Config.ELO_JSON_PATH, 'w') as f:
-                        json.dump({'ratings': elo_ratings, 'last_updated': datetime.now().isoformat()}, f, indent=2)
+                    # 与每个对手对战
+                    for opp_ckpt in opponents:
+                        opp_agent = BPAgent(
+                            embed_dim=Config.EMBED_DIM, nhead=Config.NHEAD, num_layers=Config.NUM_LAYERS,
+                            use_text=Config.USE_TEXT, use_player_heroes=Config.USE_PLAYER_HEROES,
+                        ).to(device)
+                        opp_agent.load_state_dict(torch.load(opp_ckpt, map_location=device))
+                        opp_agent.eval()
+                        
+                        wins = 0
+                        for _ in range(Config.ELO_N_GAMES):
+                            score = run_single_match(agent, opp_agent, oracle, matches_data, player_sampler, device)
+                            wins += score
+                        avg_score = wins / Config.ELO_N_GAMES
+                        
+                        # 更新ELO
+                        current_rating = elo_ratings[ckpt_path]
+                        opp_rating = elo_ratings[opp_ckpt]
+                        new_rating, new_opp_rating = update_elo(current_rating, opp_rating, avg_score, k=32)
+                        elo_ratings[ckpt_path] = new_rating
+                        elo_ratings[opp_ckpt] = new_opp_rating
+                        
+                        del opp_agent
+                
+                agent.train()
+                
+                # 记录ELO
+                current_elo = elo_ratings[ckpt_path]
+                writer.add_scalar('Elo/Rating', current_elo, global_step)
+                avg_elo = sum(elo_ratings.values()) / len(elo_ratings)
+                writer.add_scalar('Elo/AverageRating', avg_elo, global_step)
+                print(f"[*] ELO评分: 当前={current_elo:.1f}, 平均={avg_elo:.1f}")
+                
+                # 保存ELO记录到JSON
+                with open(Config.ELO_JSON_PATH, 'w') as f:
+                    json.dump({'ratings': elo_ratings, 'last_updated': datetime.now().isoformat()}, f, indent=2)
 
     writer.close()
     print("[*] 训练完成!")

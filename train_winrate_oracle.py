@@ -21,7 +21,7 @@ from model.win_rate_oracle import *
 
 torch.random.manual_seed(42)
 
-WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle-num_heroes_160"
+WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle-num_heroes_160-text-embd_dim_128"
 if not os.path.exists(WIN_RATE_ORACLE_SAVE_DIR):
     pathlib.Path(WIN_RATE_ORACLE_SAVE_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -232,10 +232,10 @@ def train(load_model_path: str = None, epochs: int = 32):
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     model = WinRateOracle(
-        embed_dim=64, 
-        nhead=4, 
-        num_layers=4, 
-        use_text=False, 
+        embed_dim=128, 
+        nhead=8, 
+        num_layers=6, 
+        use_text=True, 
         use_player_heroes=True,
         # HeroEncoder 参数
         hero_encoder_id_dim=128,
@@ -307,10 +307,11 @@ def train(load_model_path: str = None, epochs: int = 32):
         writer.add_scalar('Epoch/Accuracy', avg_acc, epoch)
 
         # 保存模型
-        if avg_acc > 0.95:  # 只保存准确率超过95%的模型
+        if avg_acc > 0.90:  # 只保存准确率超过90%的模型
             acc = avg_acc
             epoch_str = str(epoch).rjust(len(str(epochs)), '0')
             torch.save(model.state_dict(), os.path.join(WIN_RATE_ORACLE_SAVE_DIR, f"win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth"))
+            break
 
     # 4. 训练结束关闭 writer
     writer.close()

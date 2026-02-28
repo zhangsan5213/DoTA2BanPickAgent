@@ -71,7 +71,7 @@ class TrajectoryCollector:
         self.device = device
         self.n_envs = len(envs)
         
-    def collect(self, agent, oracle_reward_fn=None) -> List[Trajectory]:
+    def collect(self, agent, oracle_reward_fn=None, temperature: float = 1.0) -> List[Trajectory]:
         """
         收集轨迹
         
@@ -79,6 +79,7 @@ class TrajectoryCollector:
             agent: 策略模型（需实现encode_state和get_action）
             oracle_reward_fn: 可选的Oracle奖励函数（终局评估）
                               签名: fn(env, agent, device) -> float
+            temperature: 温度参数，>1 增加随机性，<1 减少随机性
         
         Returns:
             轨迹列表
@@ -107,7 +108,7 @@ class TrajectoryCollector:
             
             # 批量推理
             with torch.no_grad():
-                actions, log_probs, values = self._inference(agent, batch_data)
+                actions, log_probs, values = self._inference(agent, batch_data, temperature)
             
             # 执行步骤
             for batch_idx, env_idx in enumerate(active_indices):
@@ -211,7 +212,7 @@ class TrajectoryCollector:
         
         return result
     
-    def _inference(self, agent, batch_data: Dict) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
+    def _inference(self, agent, batch_data: Dict, temperature: float = 1.0) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
         """批量推理"""
         # 编码状态
         state_feat = agent.encode_state(
@@ -234,6 +235,7 @@ class TrajectoryCollector:
                 state_feat=state_feat[i:i+1],
                 candidate_hero_ids=batch_data['candidate_ids'][i:i+1],
                 deterministic=False,
+                temperature=temperature,
             )
             actions.append(action)
             log_probs.append(log_prob)

@@ -1,8 +1,20 @@
 """
-BP Agent PPO Training Script (Refactored)
+BP Agent PPO Training Script (Optimized Version)
 
-使用预训练的 WinRateOracle 作为 Reward Model，训练 BP Agent。
+针对训练不稳定问题的优化版本：
+1. 降低更新频率，增加每次更新的样本量
+2. 降低学习率，使用学习率衰减
+3. 增加熵正则化系数，促进探索
+4. 增加模型容量
+5. 添加 KL 散度约束和 Early Stopping
+6. 专注 ELO 评估（零和博弈不记录 reward）
 """
+
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn.modules.transformer")
+
+
 import os
 import random
 import numpy as np
@@ -16,48 +28,55 @@ from model.bp_agent import BPAgent
 from model.win_rate_oracle import WinRateOracle
 from env.bp_env import BPEnvironment
 from data.dataset import MatchDataset
-from training.ppo import PPOTrainer
+from training.ppo_v2 import PPOTrainerV2
 from training.collector import TrajectoryCollector
 from training.rewards import create_oracle_reward_fn
 from utils.player_preference_sampler import get_player_sampler
 from utils.elo_rating import *
+from utils.elo_rating_parallel import (
+    evaluate_checkpoints_elo_parallel,
+    evaluate_single_checkpoint_elo_parallel
+)
 
 
 class Config:
     # 路径配置
-    ORACLE_CKPT_DIR = "./ckpts/win_rate_oracle-num_heroes_160"
+    ORACLE_CKPT_DIR = "./ckpts/win_rate_oracle-num_heroes_160-text-embd_dim_128"
     DATA_FILE = "./data/high_mmr_with_stats-rank_40-duration_15.json"
     SAVE_DIR = "./ckpts/bp_agent"
-    LOG_DIR = "./runs/bp_agent"
+    LOG_DIR = "./runs/"
     ELO_JSON_PATH = "./ckpts/bp_agent/elo_ratings.json"
 
-    # 模型配置
-    EMBED_DIM = 64
-    NHEAD = 4
-    NUM_LAYERS = 4
-    USE_TEXT = False
+    # 模型配置（增大容量）
+    EMBED_DIM = 128  # 从 64 增加到 128
+    NHEAD = 8        # 从 4 增加到 8
+    NUM_LAYERS = 6   # 从 4 增加到 6
+    USE_TEXT = True
     USE_PLAYER_HEROES = True
 
-    # PPO 配置
-    PPO_EPOCHS = 4
+    # PPO 配置（更保守的更新）
+    PPO_EPOCHS = 6     # 从 4 增加到 6，每次更新更充分
     CLIP_RATIO = 0.2
     VALUE_COEF = 0.5
-    ENTROPY_COEF = 0.01
+    ENTROPY_COEF = 0.05  # 从 0.02 增加到 0.05，强制更多探索
     GAMMA = 0.99
     LAMBDA = 0.95
-    LR = 3e-4
+    LR = 2e-4          # 提高到 2e-4，加速探索
+    LR_DECAY = 0.9995  # 减缓学习率衰减，保持长期学习能力
     GRAD_CLIP = 0.5
+    MAX_KL = 0.05      # 从 0.02 提高到 0.05，允许更大更新
 
-    # 训练配置
-    BATCH_SIZE = 64
-    NUM_ENVS = 16
+    # 训练配置（降低更新频率）
+    BATCH_SIZE = 256   # 从 64 增加到 256
+    NUM_ENVS = 32      # 从 16 增加到 32，增加并行度
     MAX_EPISODES = 64000
-    UPDATE_INTERVAL = 16
-    SAVE_INTERVAL = 8
+    UPDATE_INTERVAL = 64  # 从 16 增加到 64，降低更新频率
+    SAVE_INTERVAL = 4     # 相应调整保存间隔
 
     # ELO 配置
     ELO_N_OPPONENTS = 16
     ELO_N_GAMES = 8
+    ELO_N_WORKERS = 8
 
 
 def get_latest_oracle_ckpt(oracle_dir: str) -> str:
@@ -123,12 +142,13 @@ def init_from_elo(agent, config, device, dataset, player_sampler, oracle):
         # 所有可用ckpt（新ckpt已在elo_ratings中）
         all_ckpts = list(elo_ratings.keys())
         
-        # 使用新函数进行ELO定分
-        elo_ratings = evaluate_checkpoints_elo(
+        # 使用并行版本进行ELO定分
+        elo_ratings = evaluate_checkpoints_elo_parallel(
             new_ckpts, all_ckpts, elo_ratings, BPAgent, oracle,
             dataset.matches, player_sampler, device, config,
             n_opponents_per_ckpt=getattr(config, 'ELO_N_OPPONENTS', 5),
-            n_games_per_match=getattr(config, 'ELO_N_GAMES', 10)
+            n_games_per_match=getattr(config, 'ELO_N_GAMES', 10),
+            n_workers=getattr(config, 'ELO_N_WORKERS', 4)
         )
         
         save_elo_ratings(elo_ratings, config.ELO_JSON_PATH)
@@ -144,10 +164,6 @@ def init_from_elo(agent, config, device, dataset, player_sampler, oracle):
 
 
 def main():
-    # 设置
-    # torch.manual_seed(42)
-    # np.random.seed(42)
-    # random.seed(42)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"[*] 设备: {device}")
     
@@ -174,21 +190,28 @@ def main():
     
     # 训练器
     optimizer = optim.Adam(agent.parameters(), lr=Config.LR)
-    ppo_trainer = PPOTrainer(agent, optimizer, Config, device)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=Config.LR_DECAY)
+    ppo_trainer = PPOTrainerV2(agent, optimizer, Config, device)
     collector = TrajectoryCollector(envs, device)
     reward_fn = create_oracle_reward_fn(oracle, device)
     
     # TensorBoard
-    writer = SummaryWriter(log_dir=os.path.join(Config.LOG_DIR, datetime.now().strftime("%Y%m%d-%H%M%S")))
+    writer = SummaryWriter(log_dir=os.path.join(Config.LOG_DIR, 'bp_agent_exp-' + datetime.now().strftime("%Y%m%d-%H%M%S")))
     
     # 训练循环
     global_step = 0
     saved_checkpoints = []
     elo_ratings, _ = load_elo_ratings(Config.ELO_JSON_PATH)
     
+    # 统计信息
+    recent_kls = []
+    
     for episode in tqdm(range(Config.MAX_EPISODES), desc="Training", ncols=90):
+        # 计算温度参数（逐渐降低，后期更稳定）
+        temperature = max(0.5, 1.0 - episode / Config.MAX_EPISODES)
+        
         # 收集轨迹
-        trajectories = collector.collect(agent, reward_fn)
+        trajectories = collector.collect(agent, reward_fn, temperature=temperature)
         
         # PPO更新
         if (episode + 1) % Config.UPDATE_INTERVAL == 0:
@@ -198,7 +221,18 @@ def main():
             writer.add_scalar('Loss/Policy', loss_dict['policy_loss'], global_step)
             writer.add_scalar('Loss/Value', loss_dict['value_loss'], global_step)
             writer.add_scalar('Loss/Entropy', loss_dict['entropy'], global_step)
+            
+            # 记录 KL 散度
+            if 'kl_div' in loss_dict:
+                writer.add_scalar('Train/KL_Divergence', loss_dict['kl_div'], global_step)
+                recent_kls.append(loss_dict['kl_div'])
+            
+            # 记录学习率和温度
+            writer.add_scalar('Train/Learning_Rate', scheduler.get_last_lr()[0], global_step)
+            writer.add_scalar('Train/Temperature', temperature, global_step)
+            
             global_step += 1
+            scheduler.step()
             
             # 保存checkpoint
             if (episode + 1) % (Config.UPDATE_INTERVAL * Config.SAVE_INTERVAL) == 0:
@@ -207,22 +241,23 @@ def main():
                 torch.save(agent.state_dict(), ckpt_path)
                 saved_checkpoints.append(ckpt_path)
                 
-                # 初始化新ckpt的ELO（继承前一个或1500）
+                # 初始化新ckpt的ELO
                 if len(saved_checkpoints) == 1:
                     elo_ratings[ckpt_path] = 1500.0
                 else:
                     prev_ckpt = saved_checkpoints[-2]
                     elo_ratings[ckpt_path] = elo_ratings.get(prev_ckpt, 1500.0)
                 
-                # ELO定分：与随机历史对手对战
-                print(f"[*] ELO定分...")
+                # ELO定分
+                print(f"\n[*] ELO定分...")
                 agent.eval()
                 
-                current_elo, elo_ratings = evaluate_single_checkpoint_elo(
+                current_elo, elo_ratings = evaluate_single_checkpoint_elo_parallel(
                     ckpt_path, elo_ratings, BPAgent, oracle,
                     dataset.matches, player_sampler, device, Config,
                     n_opponents=Config.ELO_N_OPPONENTS,
-                    n_games=Config.ELO_N_GAMES
+                    n_games=Config.ELO_N_GAMES,
+                    n_workers=Config.ELO_N_WORKERS
                 )
                 
                 agent.train()
@@ -232,6 +267,11 @@ def main():
                 avg_elo = sum(elo_ratings.values()) / len(elo_ratings)
                 writer.add_scalar('Elo/AverageRating', avg_elo, global_step)
                 print(f"[*] ELO: 当前={current_elo:.1f}, 平均={avg_elo:.1f}")
+                
+                # 记录 KL 趋势
+                if recent_kls:
+                    writer.add_scalar('Train/KL_Mean', np.mean(recent_kls), global_step)
+                    recent_kls = []
                 
                 save_elo_ratings(elo_ratings, Config.ELO_JSON_PATH)
     

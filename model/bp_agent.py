@@ -291,8 +291,10 @@ class BPActorNetwork(nn.Module):
         ]), persistent=False)
 
         if use_text:
+            sample_tensor = next(iter(HERO_ID_SEMANTIC_MAP.values())) if HERO_ID_SEMANTIC_MAP else None
+            default_device = sample_tensor.device if sample_tensor is not None else torch.device('cpu')
             self.register_buffer("all_hero_sem", torch.stack([
-                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024).cuda())
+                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024, device=default_device))
                 for hero_id in range(1, NUM_HEROES + 1)
             ]), persistent=False)
         else:
@@ -434,8 +436,13 @@ class BPAgent(nn.Module):
         candidate_hero_attrs: torch.Tensor = None,
         candidate_hero_semantics: torch.Tensor = None,
         deterministic: bool = False,
+        temperature: float = 1.0,
     ):
-        """获取行动"""
+        """获取行动
+        
+        Args:
+            temperature: 温度参数，>1 增加随机性，<1 减少随机性
+        """
         logits = self.actor(
             state_feat=state_feat,
             candidate_hero_ids=candidate_hero_ids,
@@ -447,6 +454,10 @@ class BPAgent(nn.Module):
         mask = (candidate_hero_ids != 0).float()
         mask[mask == 0] = -1e9
         logits = logits + mask
+        
+        # 应用温度参数（temperature scaling）
+        if temperature != 1.0:
+            logits = logits / temperature
 
         value = self.value(state_feat)
 

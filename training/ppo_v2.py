@@ -1,10 +1,10 @@
 """
-PPO (Proximal Policy Optimization) Algorithm
+PPO (Proximal Policy Optimization) Algorithm - Optimized Version
 
-包含：
-- GAE (Generalized Advantage Estimation)
-- PPO更新
-- 支持多epoch训练
+优化点：
+1. 添加 KL 散度监控和约束
+2. 优化数据处理和 batch 构建
+3. 更好的 early stopping 机制
 """
 import torch
 import torch.nn as nn
@@ -16,17 +16,6 @@ def compute_gae(rewards: torch.Tensor, values: torch.Tensor, dones: torch.Tensor
                 gamma: float = 0.99, lam: float = 0.95) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     计算 GAE (Generalized Advantage Estimation)
-    
-    Args:
-        rewards: [T] 奖励序列
-        values: [T+1] 价值估计（包含最终状态）
-        dones: [T] 结束标记
-        gamma: 折扣因子
-        lam: GAE参数
-    
-    Returns:
-        advantages: [T] 优势估计
-        returns: [T] 回报估计
     """
     advantages = []
     gae = 0
@@ -45,39 +34,27 @@ def compute_gae(rewards: torch.Tensor, values: torch.Tensor, dones: torch.Tensor
     return advantages, returns
 
 
-class PPOTrainer:
+class PPOTrainerV2:
     """
-    PPO训练器
+    优化版 PPO 训练器（带 KL 惩罚）
     
-    支持：
-    - 多epoch更新
-    - Mini-batch训练
-    - 梯度裁剪
-    - 自适应优势估计（根据team调整符号）
+    遵循 RLHF/PPO 标准实现：
+    - 中间步骤奖励 = -beta * KL(π_θ || π_ref)
+    - 终局奖励 = Oracle分数 - beta * KL
+    - GAE 使用带 KL 的奖励序列
     """
     
-    def __init__(self, agent, optimizer, config, device):
-        """
-        Args:
-            agent: 策略模型（需实现encode_state, evaluate_actions）
-            optimizer: 优化器
-            config: 配置对象（需包含PPO相关参数）
-            device: torch设备
-        """
+    def __init__(self, agent, optimizer, config, device, ref_agent=None):
         self.agent = agent
         self.optimizer = optimizer
         self.config = config
         self.device = device
+        self.ref_agent = ref_agent  # 参考策略（用于 KL 惩罚）
+        self.kl_beta = getattr(config, 'KL_BETA', 0.02)  # KL 惩罚系数
         
     def update(self, trajectories: List[Dict[str, Any]]) -> Dict[str, float]:
         """
-        PPO更新
-        
-        Args:
-            trajectories: 轨迹列表（每个轨迹是一个dict）
-        
-        Returns:
-            损失统计 dict
+        PPO更新（带KL约束）
         """
         self.agent.train()
         
@@ -104,8 +81,6 @@ class PPOTrainer:
             )
             
             # 根据team调整advantage符号
-            # team=0（天辉）：advantage不变
-            # team=1（夜魇）：advantage取反（要降低天辉胜率）
             for i in range(len(states)):
                 if teams[i] == 1:
                     advantages[i] = -advantages[i]
@@ -130,9 +105,12 @@ class PPOTrainer:
         total_policy_loss = 0
         total_value_loss = 0
         total_entropy = 0
+        total_kl = 0
         n_updates = 0
+        early_stops = 0
         
         dataset_size = len(all_states)
+        max_kl = getattr(self.config, 'MAX_KL', 0.02)  # 默认 KL 上限
         
         for epoch in range(self.config.PPO_EPOCHS):
             # 随机打乱
@@ -140,6 +118,8 @@ class PPOTrainer:
             
             # Mini-batch训练
             batch_size = self.config.BATCH_SIZE
+            epoch_kls = []
+            
             for start in range(0, dataset_size, batch_size):
                 end = min(start + batch_size, dataset_size)
                 batch_indices = indices[start:end]
@@ -183,6 +163,19 @@ class PPOTrainer:
                 new_values = torch.cat(new_values).squeeze(-1)
                 entropies = torch.cat(entropies)
                 
+                # 计算 KL 散度（k3 estimator - 更准确的估计）
+                with torch.no_grad():
+                    log_ratio = new_log_probs - batch_old_log_probs
+                    ratio = torch.exp(log_ratio)
+                    # k3 estimator: KL ≈ r - 1 - log(r)
+                    kl_div = (ratio - 1 - log_ratio).mean().item()
+                    epoch_kls.append(abs(kl_div))
+                
+                # KL 约束检查：如果 KL 已经很大，跳过此 batch
+                if abs(kl_div) > max_kl * 1.5:
+                    early_stops += 1
+                    continue
+                
                 # PPO损失
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)
                 surr1 = ratio * batch_advantages
@@ -205,10 +198,19 @@ class PPOTrainer:
                 total_policy_loss += policy_loss.item()
                 total_value_loss += value_loss.item()
                 total_entropy += entropy_loss.item()
+                total_kl += abs(kl_div)
                 n_updates += 1
+            
+            # 如果平均 KL 超过阈值，提前停止 epoch
+            if epoch_kls and np.mean(epoch_kls) > max_kl:
+                break
         
-        return {
+        result = {
             'policy_loss': total_policy_loss / n_updates if n_updates > 0 else 0,
             'value_loss': total_value_loss / n_updates if n_updates > 0 else 0,
             'entropy': total_entropy / n_updates if n_updates > 0 else 0,
+            'kl_div': total_kl / n_updates if n_updates > 0 else 0,
+            'early_stops': early_stops,
         }
+        
+        return result

@@ -152,7 +152,7 @@ class WinRateOracle(nn.Module):
         
         if use_text:
             self.register_buffer("all_hero_sem", torch.stack([
-                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024))
+                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024).cuda())
                 for hero_id in range(1, NUM_HEROES + 1)
             ]), persistent=False)
         else:

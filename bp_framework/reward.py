@@ -109,11 +109,11 @@ class RewardCalculator:
             radiant_player_feats, dire_player_feats
         )
         
-        # 从acting_team视角的奖励
-        # 如果控制天辉，reward = win_prob (越高越好)
-        # 如果控制夜魇，reward = 1 - win_prob (天辉胜率越低越好)
-        radiant_reward = win_prob
-        dire_reward = 1.0 - win_prob
+        # 零和游戏：将win_prob从[0,1]线性映射到[-1,1]
+        # Radiant奖励: 2 * win_prob - 1，范围[-1, 1]
+        # Dire奖励: Radiant的相反数
+        radiant_reward = 2.0 * win_prob - 1.0
+        dire_reward = -radiant_reward
         
         return {
             'radiant_reward': radiant_reward,

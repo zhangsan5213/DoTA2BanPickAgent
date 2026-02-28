@@ -9,16 +9,18 @@ PPO训练脚本 - 用于训练BP Agent
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn.modules.transformer")
+
+import json
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-import numpy as np
-import pandas as pd
-from typing import List, Dict, Tuple, Optional
+
+from typing import List, Dict, Tuple
 from dataclasses import dataclass
 from tqdm import tqdm
-import json
 from pathlib import Path
 
 from model.bp_agent import BPActorCritic
@@ -26,6 +28,7 @@ from model.win_rate_oracle import WinRateOracle
 from bp_framework.engine import BPEngine
 from bp_framework.environment import Team
 from bp_framework.rollout import BPRollout, RolloutBuffer
+from bp_framework.elo_manager import ELOManager
 from utils.player_preference_sampler import sample_player_preference
 
 
@@ -46,7 +49,7 @@ class PPOConfig:
     oracle_num_layers: int = 6
     
     # 训练配置
-    total_iterations: int = 1000
+    total_iterations: int = 2
     episodes_per_iter: int = 32  # 每次迭代收集32个episode
     batch_size: int = 128
     mini_batch_size: int = 32
@@ -75,6 +78,12 @@ class PPOConfig:
     
     # 奖励类型
     reward_type: str = 'final'
+    
+    # ELO配置
+    elo_num_candidates: int = 8  # 候选模型数量
+    elo_games_per_match: int = 10  # 每对模型之间的比赛场次
+    elo_initial_rating: float = 1500.0
+    elo_k_factor: float = 32.0
 
 
 def generate_team_player_features(num_heroes=160):
@@ -96,6 +105,65 @@ def generate_team_player_features(num_heroes=160):
                 player_feats[position - 1, hero_id - 1] = win_rate
     
     return player_feats
+
+
+def _collect_single_episode(
+    model_config: Dict,
+    actor_critic_state: Dict,
+    oracle_path: str,
+    device: str,
+    num_heroes: int,
+) -> Tuple['BPRollout', 'BPRollout']:
+    """收集单个episode（模块级别函数用于多进程）"""
+    import os
+    from bp_framework.engine import BPEngine
+    from model.win_rate_oracle import WinRateOracle
+    
+    # 创建模型
+    actor_critic = BPActorCritic(**model_config).to(device)
+    actor_critic.load_state_dict(actor_critic_state)
+    actor_critic.eval()
+    
+    # 加载Oracle（复制 _load_oracle 的逻辑）
+    oracle = WinRateOracle(
+        embed_dim=128,  # oracle_embed_dim
+        nhead=4,
+        num_layers=6,   # oracle_num_layers
+        use_text=True,
+        use_player_heroes=True,
+    ).to(device)
+    
+    if os.path.exists(oracle_path):
+        checkpoint = torch.load(oracle_path, map_location=device)
+        if 'model_state_dict' in checkpoint:
+            oracle.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            oracle.load_state_dict(checkpoint)
+    
+    oracle.eval()
+    for param in oracle.parameters():
+        param.requires_grad = False
+    
+    # 创建engine
+    engine = BPEngine(
+        actor_critic=actor_critic,
+        oracle=oracle,
+        device=device,
+    )
+    
+    # 生成随机玩家特征
+    r_feats = generate_team_player_features(num_heroes).to(device)
+    d_feats = generate_team_player_features(num_heroes).to(device)
+    
+    # 运行episode
+    r_rollout, d_rollout = engine.run_episode(
+        deterministic=False,
+        radiant_player_feats=r_feats,
+        dire_player_feats=d_feats,
+        verbose=False,
+    )
+    
+    return r_rollout, d_rollout
 
 
 def collate_batch_for_ppo(batch: List[Dict]) -> Dict[str, torch.Tensor]:
@@ -122,6 +190,9 @@ def collate_batch_for_ppo(batch: List[Dict]) -> Dict[str, torch.Tensor]:
         'positions': [],
         'seq_mask': [],
         'action_mask': [],
+        'current_picks': [],
+        'radiant_player_feats': [],
+        'dire_player_feats': [],
         'actions': [],
         'old_log_probs': [],
         'old_values': [],
@@ -154,11 +225,14 @@ def collate_batch_for_ppo(batch: List[Dict]) -> Dict[str, torch.Tensor]:
             all_data['positions'].append(positions)
             all_data['seq_mask'].append(seq_mask)
             all_data['action_mask'].append(t['action_mask'])
-            all_data['actions'].append(t['action_idx'])
-            all_data['old_log_probs'].append(t['log_prob'])
-            all_data['old_values'].append(t['value'])
-            all_data['returns'].append(t['return'])
-            all_data['advantages'].append(t['advantage'])
+            all_data['current_picks'].append(t['current_picks'])
+            all_data['radiant_player_feats'].append(t['radiant_player_feats'])
+            all_data['dire_player_feats'].append(t['dire_player_feats'])
+            all_data['actions'].append(torch.tensor(t['action_idx'], dtype=torch.long))
+            all_data['old_log_probs'].append(torch.tensor(t['log_prob'], dtype=torch.float32))
+            all_data['old_values'].append(torch.tensor(t['value'], dtype=torch.float32))
+            all_data['returns'].append(torch.tensor(t['return'], dtype=torch.float32))
+            all_data['advantages'].append(torch.tensor(t['advantage'], dtype=torch.float32))
     
     # Stack成tensor
     result = {}
@@ -178,18 +252,48 @@ class PPOTrainer:
         self.config = config
         self.device = torch.device(config.device)
         
-        # 创建模型
-        self.actor_critic = BPActorCritic(
-            embed_dim=config.embed_dim,
-            nhead=config.nhead,
-            num_layers=config.num_layers,
-            num_heroes=config.num_heroes,
-            use_hero_encoder=config.use_hero_encoder,
-            use_player_heroes=config.use_player_heroes,
-        ).to(self.device)
+        # 创建输出目录
+        Path(config.output_dir).mkdir(parents=True, exist_ok=True)
         
         # 加载Oracle（用于奖励计算，固定不训练）
         self.oracle = self._load_oracle()
+        
+        # 模型配置
+        self.model_config = {
+            'embed_dim': config.embed_dim,
+            'nhead': config.nhead,
+            'num_layers': config.num_layers,
+            'num_heroes': config.num_heroes,
+            'use_hero_encoder': config.use_hero_encoder,
+            'use_player_heroes': config.use_player_heroes,
+            'hero_encoder_dim': 128,
+            'use_pick_state': True,
+        }
+        
+        # 初始化ELO管理器
+        self.elo_manager = ELOManager(
+            models_dir=os.path.join(config.output_dir, 'elo_models'),
+            model_config=self.model_config,
+            oracle_path=config.oracle_path,
+            device=config.device,
+            num_opponents=config.elo_num_candidates,  # 8个对手
+            games_per_match=config.elo_games_per_match,
+            initial_elo=config.elo_initial_rating,
+            k_factor=config.elo_k_factor,
+        )
+        
+        # 检查是否需要初始化8个模型
+        self._maybe_initialize_elo_models()
+        
+        # 创建主模型（使用ELO最高的模型，或新建）
+        self.actor_critic = BPActorCritic(**self.model_config).to(self.device)
+        best_model = self.elo_manager.get_best_model()
+        if best_model is not None:
+            best_id, best_path = best_model
+            checkpoint = torch.load(best_path, map_location=self.device)
+            state_dict = checkpoint.get('model_state_dict', checkpoint)
+            self.actor_critic.load_state_dict(state_dict)
+            print(f"\nLoaded best ELO model: {best_id}")
         
         # 创建优化器
         self.optimizer = optim.Adam(
@@ -213,9 +317,84 @@ class PPOTrainer:
         # 日志
         self.train_logs = []
         self.iteration = 0
+    
+    def _maybe_initialize_elo_models(self):
+        """如果需要，初始化8个ELO模型"""
+        # 检查是否已有模型
+        existing_models = list(Path(self.elo_manager.models_dir).glob('*.pth'))
         
-        # 创建输出目录
-        Path(config.output_dir).mkdir(parents=True, exist_ok=True)
+        if len(existing_models) > 0:
+            print(f"\nFound {len(existing_models)} existing ELO models")
+            return
+        
+        print(f"\n{'='*60}")
+        print(f"Initializing 8 ELO models...")
+        print(f"{'='*60}")
+        
+        # 创建临时模型用于初始化
+        temp_model = BPActorCritic(**self.model_config).to(self.device)
+        
+        # 初始化8个模型
+        self.elo_manager.initialize_models(temp_model, iteration=0)
+        
+        # 运行初始ELO定分赛（让所有初始模型相互对战）
+        print(f"\nRunning initial ELO tournament...")
+        self._run_elo_for_all_initial_models()
+    
+    def _run_elo_for_all_initial_models(self):
+        """为所有初始模型两两对战定分"""
+        import itertools
+        
+        model_files = self.elo_manager._get_all_model_files()
+        
+        if len(model_files) < 2:
+            return
+        
+        print(f"Running full tournament for {len(model_files)} models...")
+        print(f"Each pair plays 8 matches to reduce variance")
+        
+        # 生成所有对战组合（每对模型出现8次）
+        base_pairs = list(itertools.combinations([str(p) for p in model_files], 2))
+        matches = base_pairs * 8  # 每对模型比8场
+        
+        games_per_side = (self.config.elo_games_per_match + 1) // 2
+        
+        print(f"Total matches: {len(matches)} ({len(base_pairs)} pairs × 8 rounds)")
+        
+        # 使用多进程并行（ELO对战统一用CPU）
+        results = self.elo_manager.run_matches(matches, games_per_side, use_multiprocessing=True)
+        
+        # 汇总结果（同一对模型的多场比赛合并）
+        pair_results = {}
+        for model_a_id, model_b_id, a_wins, b_wins in results:
+            pair_key = tuple(sorted([model_a_id, model_b_id]))
+            if pair_key not in pair_results:
+                pair_results[pair_key] = [0.0, 0.0]
+            
+            if pair_key[0] == model_a_id:
+                pair_results[pair_key][0] += a_wins
+                pair_results[pair_key][1] += b_wins
+            else:
+                pair_results[pair_key][0] += b_wins
+                pair_results[pair_key][1] += a_wins
+        
+        # 更新ELO（基于汇总后的结果）
+        for (model_a, model_b), (a_wins, b_wins) in pair_results.items():
+            if a_wins > b_wins:
+                self.elo_manager.elo_system.update_match(model_a, model_b)
+            elif b_wins > a_wins:
+                self.elo_manager.elo_system.update_match(model_b, model_a)
+            else:
+                self.elo_manager.elo_system.update_match(model_a, model_b, draw=True)
+        
+        # 保存ELO记录
+        self.elo_manager._save_elo_ratings()
+        
+        # 打印结果
+        print(f"\nInitial ELO Rankings:")
+        rankings = self.elo_manager.elo_system.get_rankings()
+        for rank, info in enumerate(rankings, 1):
+            print(f"  #{rank}: {info.model_id} - ELO {info.elo:.1f}")
     
     def _load_oracle(self) -> WinRateOracle:
         """加载训练好的Oracle"""
@@ -244,25 +423,55 @@ class PPOTrainer:
         return oracle
     
     def collect_rollouts(self, num_episodes: int) -> Tuple[RolloutBuffer, RolloutBuffer]:
-        """收集trajectory（批量）"""
+        """收集trajectory（批量）- 多进程并行版本"""
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        import multiprocessing as mp
+        
+        # 确定并行worker数量
+        num_workers = min(mp.cpu_count(), num_episodes, 8)
+        print(f"  Using {num_workers} workers to collect {num_episodes} episodes...")
+        
+        # 获取模型配置和状态字典
+        model_config = {
+            'embed_dim': self.config.embed_dim,
+            'nhead': self.config.nhead,
+            'num_layers': self.config.num_layers,
+            'num_heroes': self.config.num_heroes,
+            'use_hero_encoder': self.config.use_hero_encoder,
+            'hero_encoder_dim': 128,
+            'use_player_heroes': self.config.use_player_heroes,
+            'use_pick_state': True,
+        }
+        actor_critic_state = self.actor_critic.state_dict()
+        oracle_path = self.config.oracle_path
+        device = self.config.device
+        num_heroes = self.config.num_heroes
+        
+        # 并行收集
         r_buffer = RolloutBuffer()
         d_buffer = RolloutBuffer()
         
-        for _ in range(num_episodes):
-            # 生成随机玩家特征
-            r_feats = generate_team_player_features(self.config.num_heroes).to(self.device)
-            d_feats = generate_team_player_features(self.config.num_heroes).to(self.device)
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            # 提交所有任务
+            futures = [
+                executor.submit(
+                    _collect_single_episode,
+                    model_config,
+                    actor_critic_state,
+                    oracle_path,
+                    device,
+                    num_heroes,
+                ) for _ in range(num_episodes)
+            ]
             
-            # 运行episode
-            r_rollout, d_rollout = self.engine.run_episode(
-                deterministic=False,
-                radiant_player_feats=r_feats,
-                dire_player_feats=d_feats,
-                verbose=False,
-            )
-            
-            r_buffer.add_rollout(r_rollout)
-            d_buffer.add_rollout(d_rollout)
+            # 收集结果
+            for future in tqdm(as_completed(futures), total=num_episodes, desc="Collecting", ncols=90):
+                try:
+                    r_rollout, d_rollout = future.result()
+                    r_buffer.add_rollout(r_rollout)
+                    d_buffer.add_rollout(d_rollout)
+                except Exception as e:
+                    print(f"Error in episode: {e}")
         
         return r_buffer, d_buffer
     
@@ -283,6 +492,9 @@ class PPOTrainer:
                     'positions': t.positions,
                     'seq_mask': t.seq_mask,
                     'action_mask': t.action_mask,
+                    'current_picks': t.current_picks,
+                    'radiant_player_feats': t.radiant_player_feats,
+                    'dire_player_feats': t.dire_player_feats,
                     'action_idx': t.action_idx,
                     'log_prob': t.log_prob,
                     'value': t.value,
@@ -326,8 +538,14 @@ class PPOTrainer:
         indices = torch.randperm(dataset_size)
         
         for epoch in range(self.config.ppo_epochs):
+            print(f"  PPO epoch {epoch + 1}/{self.config.ppo_epochs}...")
             # Mini-batch训练
+            num_batches = (dataset_size + self.config.mini_batch_size - 1) // self.config.mini_batch_size
+            batch_idx = 0
             for start in range(0, dataset_size, self.config.mini_batch_size):
+                batch_idx += 1
+                if batch_idx % 5 == 0:
+                    print(f"    Batch {batch_idx}/{num_batches}...")
                 end = start + self.config.mini_batch_size
                 mb_indices = indices[start:end]
                 
@@ -338,11 +556,19 @@ class PPOTrainer:
                 mb_positions = batch['positions'][mb_indices]
                 mb_seq_mask = batch['seq_mask'][mb_indices]
                 mb_action_mask = batch['action_mask'][mb_indices]
+                mb_current_picks = batch['current_picks'][mb_indices]
                 mb_actions = batch['actions'][mb_indices]
                 mb_old_log_probs = batch['old_log_probs'][mb_indices]
                 mb_old_values = batch['old_values'][mb_indices]
                 mb_returns = batch['returns'][mb_indices]
                 mb_advantages = advantages[mb_indices]
+                
+                # 获取player features（如果可用）
+                mb_r_player_feats = batch.get('radiant_player_feats')
+                mb_d_player_feats = batch.get('dire_player_feats')
+                if mb_r_player_feats is not None:
+                    mb_r_player_feats = mb_r_player_feats[mb_indices]
+                    mb_d_player_feats = mb_d_player_feats[mb_indices]
                 
                 # Forward pass
                 action_probs, values = self.actor_critic(
@@ -352,6 +578,9 @@ class PPOTrainer:
                     positions=mb_positions,
                     action_mask=mb_action_mask,
                     seq_mask=mb_seq_mask,
+                    current_picks=mb_current_picks,
+                    radiant_player_feats=mb_r_player_feats,
+                    dire_player_feats=mb_d_player_feats,
                 )
                 
                 # 计算新log probs
@@ -401,21 +630,59 @@ class PPOTrainer:
         }
     
     def evaluate(self, num_episodes: int = 10) -> Dict[str, float]:
-        """评估当前策略"""
-        return self.engine.evaluate(num_episodes=num_episodes, verbose=False)
+        """
+        评估当前策略（显示ELO排名）
+        """
+        rankings = self.elo_manager.elo_system.get_rankings()
+        if len(rankings) == 0:
+            return {'elo_rating': self.config.elo_initial_rating}
+        
+        best = rankings[0]
+        return {
+            'elo_rating': best.elo,
+            'best_model_id': best.model_id,
+            'num_models': len(rankings),
+        }
     
     def save_checkpoint(self, iteration: int):
-        """保存checkpoint"""
+        """
+        保存checkpoint并进行ELO定分
+        
+        流程：
+        1. 保存当前模型到ELO模型目录
+        2. 随机抽取8个历史模型对战
+        3. 更新所有参与模型的ELO分数
+        """
+        print(f"\n{'='*60}")
+        print(f"Saving checkpoint at iteration {iteration} with ELO rating...")
+        print(f"{'='*60}")
+        
+        # 1. 保存当前模型到ELO目录
+        model_id = f"iter_{iteration:06d}"
+        model_path = os.path.join(self.elo_manager.models_dir, f"{model_id}.pth")
+        
         checkpoint = {
-            'iteration': iteration,
             'model_state_dict': self.actor_critic.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'config': self.config,
+            'iteration': iteration,
+            'model_id': model_id,
         }
+        torch.save(checkpoint, model_path)
+        print(f"Model saved to {model_path}")
         
-        save_path = Path(self.config.output_dir) / f'ppo_bp_iter_{iteration:04d}.pth'
-        torch.save(checkpoint, save_path)
-        print(f"Checkpoint saved to {save_path}")
+        # 2. 运行ELO定分赛
+        new_info = self.elo_manager.run_tournament_for_new_model(
+            new_model_path=model_path,
+            iteration=iteration,
+            use_multiprocessing=True,  # 强制并行
+        )
+        
+        # 3. 显示当前ELO排名
+        print(f"\nCurrent ELO Rankings (Top 10):")
+        rankings = self.elo_manager.elo_system.get_rankings()[:10]
+        for rank, info in enumerate(rankings, 1):
+            marker = " <-- NEW" if info.model_id == model_id else ""
+            print(f"  #{rank}: {info.model_id} - ELO {info.elo:.1f} ({info.wins}W/{info.losses}L){marker}")
     
     def train(self):
         """主训练循环"""
@@ -460,11 +727,13 @@ class PPOTrainer:
                       f"Value: {update_info.get('value_loss', 0):.4f}, "
                       f"Entropy: {update_info.get('entropy', 0):.4f}")
             
-            # 6. 评估
+            # 6. 评估（显示ELO信息）
             if iteration % self.config.eval_interval == 0 and iteration > 0:
-                print(f"\n[Iter {iteration}] Evaluating...")
-                eval_stats = self.evaluate(num_episodes=10)
-                print(f"Mean win prob: {eval_stats['mean_win_prob']:.4f}")
+                print(f"\n[Iter {iteration}] ELO Status...")
+                eval_stats = self.evaluate()
+                print(f"Best ELO: {eval_stats['elo_rating']:.1f} ({eval_stats['best_model_id']})")
+                rankings = self.elo_manager.elo_system.get_rankings()[:8]
+                print(f"Top 8: " + ", ".join([f"{r.model_id.split('_')[-1]}:{r.elo:.0f}" for r in rankings]))
             
             # 7. 保存
             if iteration % self.config.save_interval == 0 and iteration > 0:
@@ -482,8 +751,8 @@ class PPOTrainer:
 
 def main():
     config = PPOConfig(
-        total_iterations=200,
-        episodes_per_iter=32,
+        total_iterations=64000,
+        episodes_per_iter=64,
         batch_size=256,
         mini_batch_size=64,
         ppo_epochs=4,

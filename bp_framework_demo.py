@@ -85,7 +85,7 @@ def print_team_players(player_info, team_name="Team"):
         print(f"  Position {info['position']}: seed heroes = {', '.join(info['seed_heroes'])}")
 
 
-def create_dummy_models(device='cpu', use_player_heroes=False):
+def create_dummy_models(device='cpu', use_player_heroes=True):
     """创建未训练的dummy模型用于演示"""
     print("Creating dummy models...")
     

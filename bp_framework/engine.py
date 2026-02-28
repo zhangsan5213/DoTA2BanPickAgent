@@ -71,6 +71,32 @@ class BPEngine:
         # Rollout缓冲区
         self.rollout_buffer = RolloutBuffer()
     
+    def _build_current_picks(self, state: BPState, device: str = 'cpu') -> torch.Tensor:
+        """
+        构造当前已选阵容tensor [1, 10]
+        格式: [R1, R2, R3, R4, R5, D1, D2, D3, D4, D5]，未选择的位置为0
+        
+        Args:
+            state: 当前BP状态
+            device: 目标设备
+        Returns:
+            current_picks: [1, 10] tensor
+        """
+        # 获取已选英雄（1-based ID）
+        r_picks = state.radiant_picks  # List[int], 长度 0-5
+        d_picks = state.dire_picks     # List[int], 长度 0-5
+        
+        # 构造 [R1-R5, D1-D5]，未选择的位置填0
+        picks = [0] * 10
+        for i, hero_id in enumerate(r_picks):
+            if i < 5:
+                picks[i] = hero_id
+        for i, hero_id in enumerate(d_picks):
+            if i < 5:
+                picks[5 + i] = hero_id
+        
+        return torch.tensor([picks], dtype=torch.long, device=device)
+    
     def run_episode(
         self,
         deterministic: bool = False,
@@ -108,6 +134,8 @@ class BPEngine:
             print("=" * 60)
         
         step_count = 0
+        if verbose:
+            print(f"    Starting episode...")
         while not state.is_terminal:
             # 获取当前状态输入（包含完整的历史序列）
             state_tensors = self.env.get_state_for_agent()
@@ -121,6 +149,9 @@ class BPEngine:
             if d_feats is not None:
                 d_feats = d_feats.unsqueeze(0).to(self.device)  # [1, 5, NUM_HEROES]
             
+            # 构造当前已选阵容 [1, 10] 格式: [R1, R2, R3, R4, R5, D1, D2, D3, D4, D5]
+            current_picks = self._build_current_picks(state, device=self.device)
+            
             # 双方使用同一个模型决策（team embedding会自动处理阵营信息）
             with torch.no_grad():
                 action_idx, log_prob, value = self.actor_critic.select_action(
@@ -133,16 +164,16 @@ class BPEngine:
                     deterministic=deterministic,
                     radiant_player_feats=r_feats,
                     dire_player_feats=d_feats,
+                    current_picks=current_picks,
                 )
             
             # action_idx是0-based，转为1-based hero_id
             hero_id = action_idx.item() + 1
             
-            if verbose:
+            if verbose and step_count % 5 == 0:
                 action_name = "PICK" if state.current_action_type == ActionType.PICK else "BAN"
                 team_name = "RAD" if current_team == Team.RADIANT else "DIRE"
-                hero_display = hero_name_fn(hero_id) if hero_name_fn else f"Hero_{hero_id}"
-                print(f"Step {step_count:2d} | {team_name} {action_name:4s} {hero_display}")
+                print(f"      Step {step_count:2d} | {team_name} {action_name:4s} Hero_{hero_id}")
             
             # 创建transition
             transition = BPTransition(
@@ -152,6 +183,9 @@ class BPEngine:
                 positions=state_tensors['positions'].squeeze(0).cpu(),
                 seq_mask=state_tensors['seq_mask'].squeeze(0).cpu(),
                 action_mask=state_tensors['action_mask'].squeeze(0).cpu(),
+                current_picks=current_picks.squeeze(0).cpu(),
+                radiant_player_feats=r_feats.squeeze(0).cpu() if r_feats is not None else None,
+                dire_player_feats=d_feats.squeeze(0).cpu() if d_feats is not None else None,
                 action=int(hero_id),
                 action_idx=int(action_idx.item()),
                 log_prob=float(log_prob.item()),

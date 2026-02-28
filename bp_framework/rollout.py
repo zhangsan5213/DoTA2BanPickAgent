@@ -20,6 +20,13 @@ class BPTransition:
     seq_mask: torch.Tensor           # [seq_len]
     action_mask: torch.Tensor        # [num_heroes]
     
+    # 当前已选阵容状态 [10] 格式: [R1-R5, D1-D5]，0表示未选择
+    current_picks: torch.Tensor      # [10]
+    
+    # 玩家特征（可选）
+    radiant_player_feats: Optional[torch.Tensor]  # [5, NUM_HEROES]
+    dire_player_feats: Optional[torch.Tensor]     # [5, NUM_HEROES]
+    
     # 动作
     action: int                      # 选择的英雄ID (1-based)
     action_idx: int                  # 选择的索引 (0-based)
@@ -139,6 +146,16 @@ class BPRollout:
         positions_batch = torch.zeros((batch_size, max_seq_len), dtype=torch.long)
         seq_mask_batch = torch.zeros((batch_size, max_seq_len), dtype=torch.long)
         action_mask_batch = torch.zeros((batch_size, num_heroes), dtype=torch.float32)
+        current_picks_batch = torch.zeros((batch_size, 10), dtype=torch.long)
+        
+        # Player features (optional)
+        has_player_feats = self.transitions[0].radiant_player_feats is not None
+        if has_player_feats:
+            r_player_batch = torch.stack([t.radiant_player_feats for t in self.transitions])
+            d_player_batch = torch.stack([t.dire_player_feats for t in self.transitions])
+        else:
+            r_player_batch = None
+            d_player_batch = None
         
         actions = torch.zeros(batch_size, dtype=torch.long)
         log_probs = torch.zeros(batch_size, dtype=torch.float32)
@@ -158,6 +175,7 @@ class BPRollout:
                 seq_mask_batch[i, :seq_len] = trans.seq_mask
             
             action_mask_batch[i] = trans.action_mask
+            current_picks_batch[i] = trans.current_picks
             actions[i] = trans.action_idx  # 0-based index for cross entropy
             log_probs[i] = trans.log_prob
             values[i] = trans.value
@@ -167,13 +185,14 @@ class BPRollout:
                 returns[i] = self.returns[i]
                 advantages[i] = self.advantages[i]
         
-        return {
+        result = {
             'hero_ids': hero_ids_batch,
             'action_types': action_types_batch,
             'teams': teams_batch,
             'positions': positions_batch,
             'seq_mask': seq_mask_batch,
             'action_mask': action_mask_batch,
+            'current_picks': current_picks_batch,
             'actions': actions,
             'old_log_probs': log_probs,
             'old_values': values,
@@ -181,6 +200,12 @@ class BPRollout:
             'returns': returns,
             'advantages': advantages,
         }
+        
+        if has_player_feats:
+            result['radiant_player_feats'] = r_player_batch
+            result['dire_player_feats'] = d_player_batch
+        
+        return result
     
     def __len__(self):
         return len(self.transitions)

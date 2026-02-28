@@ -1,0 +1,78 @@
+{
+  "initial_rating": 1500.0,
+  "k_factor": 32.0,
+  "models": {
+    "init_00_iter_0000": {
+      "model_id": "init_00_iter_0000",
+      "elo": 1512.1578275240615,
+      "games_played": 7,
+      "wins": 4,
+      "losses": 3,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_01_iter_0000": {
+      "model_id": "init_01_iter_0000",
+      "elo": 1540.3513479471844,
+      "games_played": 7,
+      "wins": 5,
+      "losses": 2,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_02_iter_0000": {
+      "model_id": "init_02_iter_0000",
+      "elo": 1536.7378358334438,
+      "games_played": 7,
+      "wins": 5,
+      "losses": 2,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_03_iter_0000": {
+      "model_id": "init_03_iter_0000",
+      "elo": 1487.1555112021106,
+      "games_played": 7,
+      "wins": 3,
+      "losses": 4,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_04_iter_0000": {
+      "model_id": "init_04_iter_0000",
+      "elo": 1486.0745878232503,
+      "games_played": 7,
+      "wins": 3,
+      "losses": 4,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_05_iter_0000": {
+      "model_id": "init_05_iter_0000",
+      "elo": 1461.499230709562,
+      "games_played": 7,
+      "wins": 2,
+      "losses": 5,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_06_iter_0000": {
+      "model_id": "init_06_iter_0000",
+      "elo": 1433.9001683358426,
+      "games_played": 7,
+      "wins": 1,
+      "losses": 6,
+      "draws": 0,
+      "last_updated": 0
+    },
+    "init_07_iter_0000": {
+      "model_id": "init_07_iter_0000",
+      "elo": 1542.123490624545,
+      "games_played": 7,
+      "wins": 5,
+      "losses": 2,
+      "draws": 0,
+      "last_updated": 0
+    }
+  }
+}

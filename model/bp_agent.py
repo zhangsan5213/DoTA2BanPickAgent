@@ -266,7 +266,7 @@ class BPActorCritic(nn.Module):
     """
     Actor-Critic模型用于Dota 2 BP过程
     
-    输入: 变长的BP历史动作序列（已经ban/pick了哪些英雄）+ 玩家英雄偏好（可选）
+    输入: 变长的BP历史动作序列（已经ban/pick了哪些英雄）+ 当前阵容（可选）+ 玩家英雄偏好（可选）
     输出: 
       - Actor: 在当前状态下选择下一个英雄的概率分布
       - Critic: 当前状态的价值估计 V(s)
@@ -290,16 +290,20 @@ class BPActorCritic(nn.Module):
         hero_encoder_modality_dropout: float = 0.1,
         use_text: bool = True,
         # 玩家特征参数
-        use_player_heroes: bool = False,
+        use_player_heroes: bool = True,
         player_hero_embed_dim: int = 64,
+        # 阵容特征参数
+        use_pick_state: bool = True,  # 是否使用当前阵容状态
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heroes = num_heroes
         self.use_hero_encoder = use_hero_encoder
         self.use_player_heroes = use_player_heroes
+        self.use_pick_state = use_pick_state
+        self.hero_encoder_dim = hero_encoder_dim
         
-        # 1. 英雄编码器（用于编码动作中的英雄）
+        # 1. 英雄编码器（用于编码动作中的英雄和当前阵容）
         if use_hero_encoder:
             self.hero_encoder = MultiModalHeroEncoder(
                 embed_dim=hero_encoder_dim,
@@ -332,25 +336,34 @@ class BPActorCritic(nn.Module):
             dropout=dropout,
         )
         
-        # 4. 玩家特征编码器（可选）
+        # 4. 计算输入维度
+        # 基础状态维度
+        critic_input_dim = embed_dim
+        actor_input_dim = embed_dim
+        
+        # 阵容特征维度 (10个位置 * hero_encoder_dim)
+        if use_pick_state and use_hero_encoder:
+            pick_feature_dim = 10 * hero_encoder_dim
+            critic_input_dim += pick_feature_dim
+            actor_input_dim += pick_feature_dim
+        
+        # 5. 玩家特征编码器（可选）
         if use_player_heroes:
             self.player_encoder = PlayerHeroEncoder(
                 num_heroes=num_heroes,
                 hidden_dim=128,
                 embed_dim=player_hero_embed_dim,
             )
-            # 状态 + 双方玩家特征
-            critic_input_dim = embed_dim + player_hero_embed_dim * 2
-            actor_input_dim = embed_dim + player_hero_embed_dim * 2
+            # 增加玩家特征维度
+            critic_input_dim += player_hero_embed_dim * 2
+            actor_input_dim += player_hero_embed_dim * 2
         else:
             self.player_encoder = None
-            critic_input_dim = embed_dim
-            actor_input_dim = embed_dim
         
-        # 5. Critic头（状态价值）
+        # 6. Critic头（状态价值）
         self.critic_head = CriticHead(state_dim=critic_input_dim)
         
-        # 6. Actor头（动作策略）
+        # 7. Actor头（动作策略）
         self.actor_head = ActorHead(
             state_dim=actor_input_dim,
             hidden_dim=embed_dim,
@@ -377,7 +390,7 @@ class BPActorCritic(nn.Module):
         # 使用utils中的语义特征
         try:
             self.register_buffer("all_hero_sem", torch.stack([
-                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024))
+                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024).cuda())
                 for hero_id in range(1, NUM_HEROES + 1)
             ]), persistent=False)
         except:
@@ -406,37 +419,72 @@ class BPActorCritic(nn.Module):
     
     def encode_heroes(self, hero_ids: torch.Tensor) -> torch.Tensor:
         """
-        根据英雄ID获取编码特征
+        根据英雄ID获取编码特征，支持padded输入（0表示未选择的位置）
         
         Args:
-            hero_ids: [..., ] 英雄ID (1-based, 0表示无效)
+            hero_ids: [B, 10] 英雄ID (1-based, 0表示未选择的位置)
+                   格式: [R1, R2, R3, R4, R5, D1, D2, D3, D4, D5]
         Returns:
-            hero_embeds: [..., hero_encoder_dim]
+            hero_embeds: [B, 10, hero_encoder_dim] 编码后的英雄特征
+                         未选择位置用零向量填充
         """
         if not self.use_hero_encoder or self.hero_encoder is None:
             return None
         
-        original_shape = hero_ids.shape
-        hero_ids_flat = hero_ids.reshape(-1)
+        batch_size, seq_len = hero_ids.shape
+        device = hero_ids.device
         
-        # 转为0-based索引
-        indices = hero_ids_flat - 1
-        indices = torch.clamp(indices, min=0, max=self.num_heroes - 1)
+        # 初始化输出张量（用零填充）
+        hero_embeds = torch.zeros(batch_size, seq_len, self.hero_encoder_dim, 
+                                  device=device, dtype=torch.float32)
         
-        # 获取预计算的特征
-        attrs = self.all_hero_attrs[indices].to(hero_ids.device)
-        if self.all_hero_sem is not None:
-            sems = self.all_hero_sem[indices].to(hero_ids.device)
-        else:
-            sems = None
+        # 对每个batch处理
+        for b in range(batch_size):
+            # 获取当前batch的非零英雄ID（已选择的英雄）
+            batch_hero_ids = hero_ids[b]  # [10]
+            valid_mask = batch_hero_ids > 0  # 有效位置掩码 [10]
+            num_valid = valid_mask.sum().item()
+            
+            if num_valid == 0:
+                # 没有有效英雄，保持零向量
+                continue
+            
+            # 提取有效英雄的ID
+            valid_indices = torch.where(valid_mask)[0]  # [num_valid]
+            valid_hero_ids = batch_hero_ids[valid_mask]  # [num_valid]
+            
+            # 转为0-based索引（用于查表）
+            indices = valid_hero_ids - 1
+            indices = torch.clamp(indices, min=0, max=self.num_heroes - 1)
+            
+            # 确保输入是二维 [num_valid, 1] 用于 hero_encoder
+            if indices.dim() == 1:
+                indices = indices.unsqueeze(1)  # [num_valid, 1]
+            
+            # 获取预计算的特征
+            attrs = self.all_hero_attrs[indices.squeeze(1)].to(device)
+            if attrs.dim() == 2:
+                attrs = attrs.unsqueeze(1)  # [num_valid, 1, NUM_HERO_FEATURES]
+            if self.all_hero_sem is not None:
+                sems = self.all_hero_sem[indices.squeeze(1)].to(device)
+                if sems.dim() == 2:
+                    sems = sems.unsqueeze(1)  # [num_valid, 1, text_dim]
+            else:
+                sems = None
+            
+            # 编码有效英雄
+            valid_embeds = self.hero_encoder(indices, attrs, sems)  # [num_valid, 1, embed_dim]
+            valid_embeds = valid_embeds.squeeze(1)  # [num_valid, embed_dim]
+            
+            # 将编码结果放回对应位置
+            for i, idx in enumerate(valid_indices):
+                hero_embeds[b, idx] = valid_embeds[i]
         
-        # 编码英雄
-        hero_embeds = self.hero_encoder(indices, attrs, sems)
-        return hero_embeds.reshape(*original_shape, -1)
+        return hero_embeds
     
     def forward(
         self,
-        hero_ids: torch.Tensor,      # [B, seq_len] 英雄ID (1-based, 0=padding)
+        hero_ids: torch.Tensor,      # [B, seq_len] BP历史英雄ID (1-based, 0=padding)
         action_types: torch.Tensor,  # [B, seq_len] 0=ban, 1=pick
         teams: torch.Tensor,         # [B, seq_len] 0=radiant, 1=dire
         positions: torch.Tensor,     # [B, seq_len] 动作顺序位置
@@ -444,6 +492,7 @@ class BPActorCritic(nn.Module):
         seq_mask: Optional[torch.Tensor] = None,  # [B, seq_len] 1=有效位置
         radiant_player_feats: Optional[torch.Tensor] = None,  # [B, 5, NUM_HEROES] 天辉玩家偏好
         dire_player_feats: Optional[torch.Tensor] = None,     # [B, 5, NUM_HEROES] 夜魇玩家偏好
+        current_picks: Optional[torch.Tensor] = None,  # [B, 10] 当前已选阵容 [R1-R5, D1-D5], 0=未选
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         前向传播
@@ -457,6 +506,7 @@ class BPActorCritic(nn.Module):
             seq_mask: 序列有效位置掩码 [B, seq_len]，None时自动计算（hero_ids > 0）
             radiant_player_feats: 天辉玩家英雄偏好 [B, 5, NUM_HEROES]（可选）
             dire_player_feats: 夜魇玩家英雄偏好 [B, 5, NUM_HEROES]（可选）
+            current_picks: 当前已选阵容 [B, 10]（5 radiant + 5 dire），0表示该位置未选择
         
         Returns:
             action_probs: 动作概率分布 [B, num_heroes]
@@ -486,21 +536,40 @@ class BPActorCritic(nn.Module):
         # 3. 编码状态（变长序列）
         state_repr, _ = self.state_encoder(action_embeds, seq_mask)  # [B, embed_dim]
         
-        # 4. 编码玩家特征（可选）
+        # 4. 编码当前阵容特征（如果启用）
+        pick_repr = None
+        if self.use_pick_state and self.use_hero_encoder:
+            if current_picks is None:
+                # 如果没有提供current_picks，使用全零向量
+                pick_repr = torch.zeros(batch_size, 10 * self.hero_encoder_dim, 
+                                       device=device, dtype=torch.float32)
+            else:
+                # current_picks: [B, 10] -> encode_heroes 返回 [B, 10, hero_encoder_dim]
+                pick_features = self.encode_heroes(current_picks)  # [B, 10, hero_encoder_dim]
+                # 将10个位置的特征flatten
+                pick_repr = pick_features.view(batch_size, -1)  # [B, 10 * hero_encoder_dim]
+        
+        # 5. 编码玩家特征（可选）
         if self.use_player_heroes and self.player_encoder is not None:
             assert radiant_player_feats is not None and dire_player_feats is not None, \
                 "use_player_heroes=True 时必须提供 player_feats"
             r_player = self.player_encoder(radiant_player_feats)  # [B, embed_dim]
             d_player = self.player_encoder(dire_player_feats)     # [B, embed_dim]
-            # 融合状态 + 玩家特征
-            combined_repr = torch.cat([state_repr, r_player, d_player], dim=-1)
+            # 融合状态 + 阵容特征 + 玩家特征
+            if pick_repr is not None:
+                combined_repr = torch.cat([state_repr, pick_repr, r_player, d_player], dim=-1)
+            else:
+                combined_repr = torch.cat([state_repr, r_player, d_player], dim=-1)
         else:
-            combined_repr = state_repr
+            if pick_repr is not None:
+                combined_repr = torch.cat([state_repr, pick_repr], dim=-1)
+            else:
+                combined_repr = state_repr
         
-        # 5. Actor输出动作概率
+        # 6. Actor输出动作概率
         action_probs = self.actor_head(combined_repr, action_mask)  # [B, num_heroes]
         
-        # 6. Critic输出状态价值
+        # 7. Critic输出状态价值
         value = self.critic_head(combined_repr)  # [B, 1]
         
         return action_probs, value
@@ -520,6 +589,7 @@ class BPActorCritic(nn.Module):
         deterministic: bool = False,
         radiant_player_feats: Optional[torch.Tensor] = None,
         dire_player_feats: Optional[torch.Tensor] = None,
+        current_picks: Optional[torch.Tensor] = None,  # [B, 10] 当前已选阵容
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         选择动作（用于推理或rollout收集）
@@ -534,20 +604,23 @@ class BPActorCritic(nn.Module):
             deterministic: 是否确定性策略
             radiant_player_feats: 天辉玩家特征 [B, 5, NUM_HEROES]（可选）
             dire_player_feats: 夜魇玩家特征 [B, 5, NUM_HEROES]（可选）
+            current_picks: 当前已选阵容 [B, 10]（可选）
         
         Returns:
             action: 选中的英雄ID [B]
             log_prob: 对数概率 [B]
             value: 状态价值 [B]
         """
+        batch_size, seq_len = hero_ids.shape
+        device = hero_ids.device
+        
         # 先forward得到action_probs和value
         action_probs, value = self.forward(
             hero_ids, action_types, teams, positions, action_mask, seq_mask,
-            radiant_player_feats, dire_player_feats
+            radiant_player_feats, dire_player_feats, current_picks
         )
         
         # 从state_encoder重新获取state_repr（避免重复计算）
-        batch_size, seq_len = hero_ids.shape
         if seq_mask is None:
             seq_mask = (hero_ids > 0).long()
         
@@ -563,14 +636,30 @@ class BPActorCritic(nn.Module):
         )
         state_repr, _ = self.state_encoder(action_embeds, seq_mask)
         
+        # 编码当前阵容特征
+        pick_repr = None
+        if self.use_pick_state and self.use_hero_encoder:
+            if current_picks is None:
+                pick_repr = torch.zeros(batch_size, 10 * self.hero_encoder_dim, 
+                                       device=device, dtype=torch.float32)
+            else:
+                pick_features = self.encode_heroes(current_picks)  # [B, 10, hero_encoder_dim]
+                pick_repr = pick_features.view(batch_size, -1)  # [B, 10 * hero_encoder_dim]
+        
         # 编码玩家特征（如果启用）
         if self.use_player_heroes and self.player_encoder is not None:
             assert radiant_player_feats is not None and dire_player_feats is not None
             r_player = self.player_encoder(radiant_player_feats)
             d_player = self.player_encoder(dire_player_feats)
-            combined_repr = torch.cat([state_repr, r_player, d_player], dim=-1)
+            if pick_repr is not None:
+                combined_repr = torch.cat([state_repr, pick_repr, r_player, d_player], dim=-1)
+            else:
+                combined_repr = torch.cat([state_repr, r_player, d_player], dim=-1)
         else:
-            combined_repr = state_repr
+            if pick_repr is not None:
+                combined_repr = torch.cat([state_repr, pick_repr], dim=-1)
+            else:
+                combined_repr = state_repr
         
         # 采样动作
         action, log_prob = self.actor_head.get_action_and_logprob(

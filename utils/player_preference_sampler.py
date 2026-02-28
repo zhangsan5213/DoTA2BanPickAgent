@@ -1,394 +1,414 @@
 """
 玩家偏好采样器
-用于Self-Play时生成具有合理偏好分布的虚拟玩家
-基于英雄特征相似性进行采样，确保玩家偏好的内聚性（如擅长Carry的玩家偏好相似的Carry英雄）
+根据指定位置生成玩家的本命英雄池
 """
+
 import numpy as np
-import torch
-from typing import List, Tuple, Optional, Dict
-
-# 延迟导入，避免循环依赖
-_hero_id_feature_map = None
-_num_heroes = None
-
-def _get_raw_data():
-    """延迟加载raw_data，避免循环导入问题"""
-    global _hero_id_feature_map, _num_heroes
-    if _hero_id_feature_map is None:
-        from utils.raw_data import HERO_ID_FEATURE_MAP, NUM_HEROES
-        _hero_id_feature_map = HERO_ID_FEATURE_MAP
-        _num_heroes = NUM_HEROES
-    return _hero_id_feature_map, _num_heroes
+import pandas as pd
+import json
+from typing import List, Tuple, Dict
+from pathlib import Path
 
 
-class HeroSimilarityMatrix:
-    """英雄相似度矩阵 - 预计算基于特征的英雄间相似度"""
-    
-    def __init__(self):
-        HERO_ID_FEATURE_MAP, NUM_HEROES = _get_raw_data()
-        
-        self.num_heroes = NUM_HEROES
-        self.valid_hero_ids = list(HERO_ID_FEATURE_MAP.keys())
-        
-        # 构建特征矩阵 [num_valid_heroes, feature_dim]
-        self.hero_id_to_idx = {h_id: i for i, h_id in enumerate(self.valid_hero_ids)}
-        self.idx_to_hero_id = {i: h_id for i, h_id in enumerate(self.valid_hero_ids)}
-        
-        features = []
-        for h_id in self.valid_hero_ids:
-            feat = HERO_ID_FEATURE_MAP[h_id].numpy()
-            features.append(feat)
-        self.feature_matrix = np.stack(features)  # [N, 21]
-        
-        # 归一化特征用于余弦相似度计算
-        self.feature_matrix_norm = self.feature_matrix / (
-            np.linalg.norm(self.feature_matrix, axis=1, keepdims=True) + 1e-8
-        )
-        
-        # 预计算相似度矩阵
-        self.similarity_matrix = self._compute_similarity_matrix()
-    
-    def _compute_similarity_matrix(self) -> np.ndarray:
-        """计算所有有效英雄间的余弦相似度矩阵"""
-        # 归一化后的点积 = 余弦相似度
-        sim_matrix = np.dot(self.feature_matrix_norm, self.feature_matrix_norm.T)
-        return sim_matrix  # [N_valid, N_valid]
-    
-    def get_similarity(self, hero_id1: int, hero_id2: int) -> float:
-        """获取两个英雄间的相似度"""
-        if hero_id1 not in self.hero_id_to_idx or hero_id2 not in self.hero_id_to_idx:
-            return 0.0
-        idx1 = self.hero_id_to_idx[hero_id1]
-        idx2 = self.hero_id_to_idx[hero_id2]
-        return self.similarity_matrix[idx1, idx2]
-    
-    def get_top_k_similar(self, hero_id: int, k: int = 5) -> List[Tuple[int, float]]:
-        """获取与指定英雄最相似的k个英雄"""
-        if hero_id not in self.hero_id_to_idx:
-            return []
-        idx = self.hero_id_to_idx[hero_id]
-        similarities = self.similarity_matrix[idx]
-        
-        # 获取top k（排除自己）
-        top_indices = np.argsort(similarities)[::-1][1:k+1]
-        return [(self.idx_to_hero_id[i], similarities[i]) for i in top_indices]
+# 用于计算相似度的特征列（角色标签 + 主属性）
+SIMILARITY_FEATURES = [
+    'attr_agi', 'attr_all', 'attr_int', 'attr_str',
+    'role_Carry', 'role_Support', 'role_Pusher', 
+    'role_Initiator', 'role_Disabler', 'role_Nuker', 
+    'role_Durable', 'role_Escape'
+]
 
 
-class PlayerPreferenceSampler:
+def load_hero_positions(data_path: str = None) -> Dict[str, Dict[str, bool]]:
+    """加载英雄位置映射数据"""
+    if data_path is None:
+        data_path = Path(__file__).parent.parent / "data" / "hero_positions.json"
+    with open(data_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def load_hero_features(data_path: str = None) -> pd.DataFrame:
+    """加载英雄特征数据"""
+    if data_path is None:
+        data_path = Path(__file__).parent.parent / "data" / "hero_features.xlsx"
+    df = pd.read_excel(data_path)
+    return df
+
+
+def get_heroes_by_position(df: pd.DataFrame, hero_positions: Dict, position: int) -> pd.DataFrame:
     """
-    玩家偏好采样器
+    根据位置筛选英雄
     
-    基于英雄相似性生成虚拟玩家的偏好分布。
-    核心思想：真实玩家的偏好具有内聚性——擅长的英雄往往在玩法/定位上相似。
+    Args:
+        df: 英雄特征DataFrame
+        hero_positions: 英雄位置映射字典
+        position: 位置 (1-5)
     
-    采样策略：
-    1. 随机选择1-3个"核心英雄"作为玩家的"本命"
-    2. 基于核心英雄的相似度生成对所有英雄的偏好分数
-    3. 将偏好分数转换为胜率分布（偏好高的英雄胜率也高，但有噪声）
+    Returns:
+        该位置的英雄DataFrame
     """
+    position_str = str(position)
+    valid_heroes = [
+        f"npc_dota_hero_{hero}" 
+        for hero, positions in hero_positions.items() 
+        if positions.get(position_str, False)
+    ]
     
-    def __init__(self, temperature: float = 0.5, randomness: float = 0.2):
-        """
-        Args:
-            temperature: 控制偏好的集中度，越小越集中（越"专精"），越大越分散
-            randomness: 控制胜率的随机噪声程度
-        """
-        self.similarity = HeroSimilarityMatrix()
-        self.temperature = temperature
-        self.randomness = randomness
-        
-        # 预计算每个英雄的相似度排名（用于快速采样）
-        self._precompute_similarity_ranks()
+    result = df[df['name'].isin(valid_heroes)].copy()
     
-    def _precompute_similarity_ranks(self):
-        """预计算每个英雄最相似的其他英雄列表"""
-        self.hero_similar_ranks = {}
-        for h_id in self.similarity.valid_hero_ids:
-            idx = self.similarity.hero_id_to_idx[h_id]
-            sims = self.similarity.similarity_matrix[idx]
-            # 按相似度排序（排除自己）
-            ranked_indices = np.argsort(sims)[::-1][1:]
-            self.hero_similar_ranks[h_id] = [
-                (self.similarity.idx_to_hero_id[i], sims[i]) 
-                for i in ranked_indices
-            ]
+    if len(result) == 0:
+        raise ValueError(f"位置{position}没有匹配的英雄")
     
-    def sample_player_preferences(self, n_players: int = 1) -> List[Dict[int, float]]:
-        """
-        采样多个虚拟玩家的偏好分布
-        
-        Returns:
-            List of {hero_id: preference_score}，长度为n_players
-        """
-        return [self._sample_single_player() for _ in range(n_players)]
+    return result
+
+
+def sample_from_distribution(m: int, min_val: float = 0.45, max_val: float = 0.7) -> np.ndarray:
+    """
+    从以0.5为中心的对称分布中采样胜率
+    离0.5越远概率越低，使用正态分布的绝对值
     
-    def _sample_single_player(self) -> Dict[int, float]:
-        """采样单个虚拟玩家的偏好分布
-        
-        偏好分数分布逻辑：
-        - 本命英雄（核心英雄）：偏好接近1.0，反映玩家最擅长的英雄
-        - 相似英雄：根据与核心英雄的相似度线性插值，相似度越高偏好越高
-        - 无关英雄：随机的基础偏好（0.2-0.5），反映普通水平
-        
-        最终形成：少数英雄偏好很高（0.7-1.0），大部分在0.3-0.6波动
-        """
-        # 1. 随机选择1-3个核心英雄（该玩家的"本命"）
-        n_core_heroes = np.random.choice([1, 2, 3], p=[0.4, 0.4, 0.2])
-        core_heroes = np.random.choice(
-            self.similarity.valid_hero_ids, 
-            size=n_core_heroes, 
-            replace=False
-        )
-        
-        # 2. 基于核心英雄计算对所有英雄的偏好分数
-        preference_scores = np.zeros(len(self.similarity.valid_hero_ids))
-        
-        # 参数配置
-        CORE_PREF = 1.0  # 本命英雄的基准偏好
-        MIN_PREF = 0.25  # 最低偏好（完全不会玩的英雄）
-        MAX_PREF = 0.95  # 最高偏好上限（本命英雄实际值）
-        
-        for core_id in core_heroes:
-            core_idx = self.similarity.hero_id_to_idx[core_id]
-            # 获取该核心英雄对所有其他英雄的相似度
-            similarities = self.similarity.similarity_matrix[core_idx].copy()
-            
-            # 本命英雄自己的偏好设为1.0（最高）
-            similarities[core_idx] = 1.0
-            
-            # 根据相似度映射到偏好分数：
-            # - 相似度=1（自己）-> 偏好=MAX_PREF (0.95)
-            # - 相似度=0（完全不相关）-> 偏好=MIN_PREF (0.25)
-            prefs_from_this_core = MIN_PREF + (MAX_PREF - MIN_PREF) * similarities
-            
-            # 累加（多个核心英雄的偏好会混合，取平均）
-            preference_scores += prefs_from_this_core / n_core_heroes
-        
-        # 3. 应用temperature调节集中度
-        # temperature < 1: 更集中（高手型玩家，偏好差异大）
-        # temperature > 1: 更分散（万金油型玩家，啥都会一点）
-        # 使用power变换：分数^temperature
-        # temperature=0.5时，高分更高，低分相对提升较少
-        # temperature=1.0时，保持线性
-        # temperature=2.0时，压缩差异
-        if self.temperature != 1.0:
-            # 归一化到[0,1]后做power变换，再映射回来
-            normalized = (preference_scores - MIN_PREF) / (MAX_PREF - MIN_PREF)
-            if self.temperature < 1.0:
-                # 更集中：高分更高
-                transformed = np.power(normalized, self.temperature)
-            else:
-                # 更分散：差异缩小
-                transformed = np.power(normalized, 1.0 / self.temperature)
-            preference_scores = MIN_PREF + transformed * (MAX_PREF - MIN_PREF)
-        
-        # 4. 添加少量随机噪声，让分布更自然
-        noise = np.random.normal(0, 0.05, size=preference_scores.shape)
-        preference_scores = np.clip(preference_scores + noise, 0.1, 1.0)
-        
-        # 5. 转换为字典格式
-        return {
-            self.similarity.idx_to_hero_id[i]: float(preference_scores[i])
-            for i in range(len(preference_scores))
-        }
+    Args:
+        m: 采样数量
+        min_val: 最小值
+        max_val: 最大值
     
-    def preferences_to_winrate_vector(
-        self, 
-        preferences: Dict[int, float],
-        min_games: int = 3,
-        max_heroes_per_player: int = 10
-    ) -> np.ndarray:
-        """
-        将偏好分数转换为胜率向量（用于输入网络）
+    Returns:
+        采样结果数组
+    """
+    samples = []
+    while len(samples) < m:
+        # 生成正态分布，然后取绝对值并加上0.5
+        val = np.random.normal(0, 0.08)
+        winrate = 0.5 + abs(val)
+        # 限制在范围内
+        if min_val <= winrate <= max_val:
+            samples.append(winrate)
+    
+    return np.array(samples)
+
+
+def compute_similarities_to_seed(
+    candidates_df: pd.DataFrame, 
+    seed_heroes_df: pd.DataFrame,
+    feature_cols: List[str] = None
+) -> np.ndarray:
+    """
+    计算候选英雄与种子英雄的平均相似度
+    
+    Args:
+        candidates_df: 候选英雄DataFrame
+        seed_heroes_df: 种子英雄DataFrame
+        feature_cols: 用于计算的特征列
+    
+    Returns:
+        每个候选英雄与种子英雄的平均相似度数组
+    """
+    if feature_cols is None:
+        feature_cols = SIMILARITY_FEATURES
+    
+    # 种子英雄的平均特征向量
+    seed_features = seed_heroes_df[feature_cols].mean(axis=0).values
+    seed_norm = np.linalg.norm(seed_features)
+    if seed_norm > 0:
+        seed_features = seed_features / seed_norm
+    
+    # 候选英雄特征
+    candidate_features = candidates_df[feature_cols].values
+    candidate_norms = np.linalg.norm(candidate_features, axis=1, keepdims=True)
+    candidate_norms[candidate_norms == 0] = 1
+    candidate_features_normalized = candidate_features / candidate_norms
+    
+    # 计算余弦相似度
+    similarities = candidate_features_normalized @ seed_features
+    
+    return similarities
+
+
+def sample_similar_heroes(
+    df: pd.DataFrame,
+    seed_heroes: pd.DataFrame,
+    n: int,
+    exclude_ids: List[int],
+    allow_divergence: bool = True
+) -> pd.DataFrame:
+    """
+    根据种子英雄采样相似英雄
+    
+    Args:
+        df: 全部英雄DataFrame
+        seed_heroes: 种子英雄DataFrame
+        n: 需要采样的数量
+        exclude_ids: 需要排除的英雄ID
+        allow_divergence: 是否允许较大程度的发散（跨位置采样时设为True）
+    
+    Returns:
+        采样的相似英雄DataFrame
+    """
+    # 计算种子英雄的平均特征向量
+    seed_features = seed_heroes[SIMILARITY_FEATURES].mean(axis=0).values
+    
+    # 计算所有候选英雄与种子英雄的相似度
+    candidates = df[~df['id'].isin(exclude_ids)].copy()
+    if len(candidates) == 0:
+        return candidates
+    
+    candidate_features = candidates[SIMILARITY_FEATURES].values
+    
+    # 归一化
+    seed_norm = np.linalg.norm(seed_features)
+    if seed_norm > 0:
+        seed_features = seed_features / seed_norm
+    
+    candidate_norms = np.linalg.norm(candidate_features, axis=1, keepdims=True)
+    candidate_norms[candidate_norms == 0] = 1
+    candidate_features_normalized = candidate_features / candidate_norms
+    
+    # 计算余弦相似度
+    similarities = candidate_features_normalized @ seed_features
+    
+    # 转换为概率
+    if allow_divergence:
+        # 允许较大发散：给低相似度英雄更多机会
+        # 使用较温和的softmax
+        exp_sim = np.exp(similarities * 2)
+    else:
+        # 同位置内聚类：高相似度英雄概率更高
+        exp_sim = np.exp(similarities * 5)
+    
+    probs = exp_sim / exp_sim.sum()
+    
+    # 采样n个
+    n = min(n, len(candidates))
+    selected_indices = np.random.choice(
+        len(candidates), 
+        size=n, 
+        replace=False, 
+        p=probs
+    )
+    
+    return candidates.iloc[selected_indices]
+
+
+def sample_player_preference(
+    position: int,
+    m: int = 3,
+    n: int = 5,
+    data_path: str = None,
+    positions_path: str = None,
+    random_seed: int = None
+) -> List[Dict]:
+    """
+    采样玩家的本命英雄池
+    
+    算法步骤：
+    1. 根据位置筛选候选英雄（同位置英雄）
+    2. 在该范围内采样m个特征相似的英雄作为种子
+    3. 根据这m个种子英雄，在全部英雄中找寻相似英雄，采样n个（跨位置，允许发散）
+    4. 为m+n个英雄分配0.45~0.7的胜率，离0.5越远概率越低
+    
+    Args:
+        position: 玩家主要位置 (1-5)
+        m: 同位置种子英雄数量
+        n: 跨位置扩展英雄数量
+        data_path: 英雄特征数据路径，默认使用data/hero_features.xlsx
+        positions_path: 英雄位置映射文件路径，默认使用data/hero_positions.json
+        random_seed: 随机种子
+    
+    Returns:
+        List[Dict]: 包含英雄信息和胜率的字典列表
+        每个字典包含：id, name, win_rate, is_seed (是否种子英雄)
+    """
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
+    # 加载数据
+    df = load_hero_features(data_path)
+    hero_positions = load_hero_positions(positions_path)
+    
+    # 第一步：根据位置筛选英雄
+    position_heroes = get_heroes_by_position(df, hero_positions, position)
+    
+    if len(position_heroes) < m:
+        raise ValueError(f"位置{position}的英雄数量({len(position_heroes)})不足{m}个")
+    
+    # 第二步：在同位置英雄中采样m个特征相似的英雄
+    # 先随机选一个种子
+    first_seed_idx = np.random.choice(len(position_heroes))
+    seed_heroes_list = [position_heroes.iloc[first_seed_idx]]
+    
+    if m > 1:
+        # 计算与第一个种子的相似度，采样其余m-1个
+        remaining = position_heroes.drop(position_heroes.index[first_seed_idx])
         
-        Args:
-            preferences: {hero_id: preference_score}
-            min_games: 最少场次阈值（影响是否记录该英雄）
-            max_heroes_per_player: 每个玩家最多记录多少个英雄
-            
-        Returns:
-            winrate_vector: [NUM_HEROES]，无效位置为0
-        """
-        _, NUM_HEROES = _get_raw_data()
+        # 计算相似度
+        seed_heroes_df = pd.DataFrame([position_heroes.iloc[first_seed_idx]])
+        similarities = compute_similarities_to_seed(remaining, seed_heroes_df)
         
-        # 基于偏好分数决定玩家会玩哪些英雄
-        hero_ids = list(preferences.keys())
-        scores = np.array([preferences[h_id] for h_id in hero_ids])
+        # 基于相似度采样m-1个（同位置内聚类，使用较高区分度）
+        exp_sim = np.exp(similarities * 5)
+        probs = exp_sim / exp_sim.sum()
         
-        # 根据偏好分数采样该玩家实际玩的英雄（偏好高的更可能被玩）
-        # 使用多项式分布决定英雄使用频率
-        n_heroes_played = np.random.randint(min_games, max_heroes_per_player + 1)
-        
-        # 按偏好分数加权采样n_heroes_played个英雄
-        probs = scores / scores.sum()
-        played_heroes = np.random.choice(
-            len(hero_ids), 
-            size=min(n_heroes_played, len(hero_ids)), 
+        selected_indices = np.random.choice(
+            len(remaining), 
+            size=min(m-1, len(remaining)), 
             replace=False, 
             p=probs
         )
         
-        # 为每个玩的英雄生成胜率（偏好高的胜率也高，但有噪声）
-        winrate_vector = np.zeros(NUM_HEROES)
-        
-        for idx in played_heroes:
-            hero_id = hero_ids[idx]
-            pref_score = scores[idx]
-            
-            # 胜率计算：
-            # 偏好分数范围约0.1-1.0，映射到胜率35%-75%
-            # - 偏好1.0（本命英雄）-> 约70-75%胜率
-            # - 偏好0.5（普通英雄）-> 约50%胜率  
-            # - 偏好0.2（不会玩的）-> 约35-40%胜率
-            
-            # 线性映射：winrate = 0.35 + pref_score * 0.4
-            # 即：0.1->0.39, 0.5->0.55, 1.0->0.75
-            base_winrate = 0.35
-            pref_bonus = pref_score * 0.40  # 偏好最高贡献40%胜率
-            
-            # 根据randomness添加噪声（randomness=0.2时，std=0.05）
-            noise = np.random.normal(0, self.randomness * 0.25)
-            
-            winrate = np.clip(base_winrate + pref_bonus + noise, 0.05, 0.95)
-            winrate_vector[hero_id - 1] = winrate  # hero_id是1-based
-        
-        return winrate_vector
+        for idx in selected_indices:
+            seed_heroes_list.append(remaining.iloc[idx])
     
-    def sample_team_player_features(
-        self, 
-        n_teams: int = 1,
-        min_games: int = 3,
-        max_heroes_per_player: int = 10
-    ) -> np.ndarray:
-        """
-        采样一个/多个队伍的5个玩家的特征
+    seed_heroes = pd.DataFrame(seed_heroes_list)
+    seed_ids = seed_heroes['id'].tolist()
+    
+    # 第三步：在全部英雄中找寻相似英雄，采样n个（跨位置，允许发散）
+    expansion_heroes = sample_similar_heroes(df, seed_heroes, n, seed_ids, allow_divergence=True)
+    expansion_ids = expansion_heroes['id'].tolist()
+    
+    # 合并结果
+    all_heroes = pd.concat([seed_heroes, expansion_heroes], ignore_index=True)
+    
+    # 第四步：分配胜率
+    win_rates = sample_from_distribution(len(all_heroes))
+    
+    # 构建结果
+    results = []
+    for i, (_, row) in enumerate(all_heroes.iterrows()):
+        # 提取英雄名称（去掉前缀）
+        hero_name = row['name'].replace('npc_dota_hero_', '')
         
-        Args:
-            n_teams: 队伍数量
-            min_games: 最少场次阈值
-            max_heroes_per_player: 每个玩家最多记录多少个英雄
-            
-        Returns:
-            player_features: [n_teams, 5, NUM_HEROES]
-        """
-        all_teams = []
-        
-        for _ in range(n_teams):
-            # 为一个队伍的5个玩家采样
-            team_prefs = self.sample_player_preferences(n_players=5)
-            team_features = []
-            
-            for prefs in team_prefs:
-                winrate_vec = self.preferences_to_winrate_vector(
-                    prefs, min_games, max_heroes_per_player
-                )
-                team_features.append(winrate_vec)
-            
-            # 补全到5个玩家
-            while len(team_features) < 5:
-                team_features.append(np.zeros(self.similarity.num_heroes))
-            
-            all_teams.append(np.stack(team_features))
-        
-        return np.stack(all_teams)  # [n_teams, 5, NUM_HEROES]
+        results.append({
+            'id': int(row['id']),
+            'name': hero_name,
+            'full_name': row['name'],
+            'win_rate': round(win_rates[i], 4),
+            'is_seed': row['id'] in seed_ids,
+            'position': position
+        })
+    
+    return results
 
 
-# 全局采样器实例（单例模式，避免重复计算相似度矩阵）
-_player_sampler = None
-
-def get_player_sampler(temperature: float = 0.5, randomness: float = 0.2) -> PlayerPreferenceSampler:
-    """获取全局玩家偏好采样器"""
-    global _player_sampler
-    if _player_sampler is None:
-        _player_sampler = PlayerPreferenceSampler(temperature, randomness)
-    return _player_sampler
-
-
-def sample_random_player_features(
-    temperature: float = 0.5,
-    randomness: float = 0.2,
-    min_games: int = 3,
-    max_heroes_per_player: int = 10
-) -> np.ndarray:
+def batch_sample_player_preferences(
+    num_players: int,
+    position_distribution: Dict[int, float] = None,
+    m: int = 3,
+    n: int = 5,
+    data_path: str = None,
+    positions_path: str = None,
+    random_seed: int = None
+) -> List[Dict]:
     """
-    便捷函数：采样随机玩家的特征
+    批量采样多个玩家的偏好
+    
+    Args:
+        num_players: 玩家数量
+        position_distribution: 位置分布概率，默认均匀分布
+        m: 每个玩家的种子英雄数量
+        n: 每个玩家的扩展英雄数量
+        data_path: 英雄特征数据路径
+        positions_path: 英雄位置映射文件路径
+        random_seed: 随机种子
     
     Returns:
-        player_features: [5, NUM_HEROES]
+        包含所有玩家偏好的列表
     """
-    sampler = get_player_sampler(temperature, randomness)
-    team_features = sampler.sample_team_player_features(
-        n_teams=1,
-        min_games=min_games,
-        max_heroes_per_player=max_heroes_per_player
-    )
-    return team_features[0]  # [5, NUM_HEROES]
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
+    if position_distribution is None:
+        position_distribution = {1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2}
+    
+    positions = list(position_distribution.keys())
+    probs = list(position_distribution.values())
+    
+    all_players = []
+    for i in range(num_players):
+        position = np.random.choice(positions, p=probs)
+        player_pref = sample_player_preference(
+            position=position,
+            m=m,
+            n=n,
+            data_path=data_path,
+            positions_path=positions_path,
+            random_seed=None  # 不设置，继续使用当前随机状态
+        )
+        all_players.append({
+            'player_id': i,
+            'position': position,
+            'heroes': player_pref
+        })
+    
+    return all_players
 
 
-def batch_sample_player_features(
-    batch_size: int,
-    temperature: float = 0.5,
-    randomness: float = 0.2,
-    min_games: int = 3,
-    max_heroes_per_player: int = 10
-) -> np.ndarray:
+def get_position_heroes(position: int, positions_path: str = None) -> List[str]:
     """
-    便捷函数：批量采样玩家特征
+    获取指定位置的所有英雄名称
+    
+    Args:
+        position: 位置 (1-5)
+        positions_path: 英雄位置映射文件路径
     
     Returns:
-        player_features: [batch_size, 2, 5, NUM_HEROES] 
-                        ( Radiant[5,NUM_HEROES], Dire[5,NUM_HEROES] )
+        英雄名称列表（不含npc_dota_hero_前缀）
     """
-    sampler = get_player_sampler(temperature, randomness)
-    # 采样两队
-    teams_features = sampler.sample_team_player_features(
-        n_teams=batch_size * 2,
-        min_games=min_games,
-        max_heroes_per_player=max_heroes_per_player
-    )  # [batch_size*2, 5, NUM_HEROES]
-    
-    # 分成Radiant和Dire
-    radiant = teams_features[0::2]  # [batch_size, 5, NUM_HEROES]
-    dire = teams_features[1::2]     # [batch_size, 5, NUM_HEROES]
-    
-    return np.stack([radiant, dire], axis=1)  # [batch_size, 2, 5, NUM_HEROES]
+    hero_positions = load_hero_positions(positions_path)
+    position_str = str(position)
+    return [
+        hero for hero, positions in hero_positions.items() 
+        if positions.get(position_str, False)
+    ]
 
 
 if __name__ == "__main__":
     # 测试代码
-    import sys
-    sys.path.insert(0, '.')
-    
     print("=" * 60)
-    print("测试玩家偏好采样器")
+    print("玩家偏好采样器测试")
     print("=" * 60)
     
-    sampler = PlayerPreferenceSampler(temperature=0.5, randomness=0.2)
+    # 显示各位置英雄数量
+    print("\n各位置英雄数量:")
+    for pos in range(1, 6):
+        heroes = get_position_heroes(pos)
+        print(f"  {pos}号位: {len(heroes)}个")
     
-    # 测试1：采样单个玩家偏好
-    print("\n[测试1] 单个玩家偏好分布（Top 10）:")
-    prefs = sampler._sample_single_player()
-    sorted_prefs = sorted(prefs.items(), key=lambda x: x[1], reverse=True)[:10]
-    for hero_id, score in sorted_prefs:
-        print(f"  Hero {hero_id}: {score:.4f}")
+    # 测试各个位置
+    for pos in range(1, 6):
+        print(f"\n{'='*40}")
+        print(f"位置 {pos} 号位玩家示例:")
+        print(f"{'='*40}")
+        
+        try:
+            heroes = sample_player_preference(
+                position=pos,
+                m=3,
+                n=5,
+                random_seed=42 + pos
+            )
+            
+            print(f"共 {len(heroes)} 个本命英雄:")
+            for h in heroes:
+                seed_mark = " [种子]" if h['is_seed'] else ""
+                print(f"  - {h['name']}: {h['win_rate']*100:.2f}%{seed_mark}")
+        except Exception as e:
+            print(f"错误: {e}")
     
-    # 测试2：转换为胜率向量
-    print("\n[测试2] 胜率向量（非零元素）:")
-    winrate_vec = sampler.preferences_to_winrate_vector(prefs)
-    non_zero = [(i+1, v) for i, v in enumerate(winrate_vec) if v > 0]
-    for hero_id, winrate in non_zero[:10]:
-        print(f"  Hero {hero_id}: {winrate:.3f}")
+    # 测试批量采样
+    print(f"\n{'='*40}")
+    print("批量采样 10 个玩家:")
+    print(f"{'='*40}")
     
-    # 测试3：采样完整队伍
-    print("\n[测试3] 完整队伍特征 shape:")
-    team_features = sampler.sample_team_player_features(n_teams=1)
-    print(f"  Team features shape: {team_features.shape}")  # [1, 5, NUM_HEROES]
+    players = batch_sample_player_preferences(
+        num_players=10,
+        random_seed=123
+    )
     
-    # 测试4：查看相似英雄
-    print("\n[测试4] Hero 1 (Anti-Mage) 的最相似英雄:")
-    sim_matrix = HeroSimilarityMatrix()
-    similar = sim_matrix.get_top_k_similar(1, k=5)
-    for hero_id, sim in similar:
-        print(f"  Hero {hero_id}: sim={sim:.3f}")
-    
-    print("\n[+] 所有测试通过!")
+    for p in players:
+        seed_heroes = [h['name'] for h in p['heroes'] if h['is_seed']]
+        expansion_heroes = [h['name'] for h in p['heroes'] if not h['is_seed']]
+        avg_winrate = np.mean([h['win_rate'] for h in p['heroes']])
+        print(f"\n玩家 {p['player_id']} ({p['position']}号位):")
+        print(f"  种子英雄: {', '.join(seed_heroes)}")
+        print(f"  扩展英雄: {', '.join(expansion_heroes)}")
+        print(f"  平均胜率: {avg_winrate*100:.2f}%")

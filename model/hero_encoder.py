@@ -17,6 +17,7 @@ class AttentionFusion(nn.Module):
         super().__init__()
         self.use_text = use_text
         self.num_modalities = 3 if use_text else 2
+        self.embed_dim = embed_dim
         
         # 投影到统一维度
         self.id_proj = nn.Linear(id_dim, embed_dim)
@@ -53,6 +54,12 @@ class AttentionFusion(nn.Module):
         text_feat: [B, L, text_dim] (optional)
         """
         B, L = id_feat.shape[:2]
+        
+        # 处理空序列情况（如BP初始状态）
+        if L == 0:
+            fused = id_feat.new_zeros(B, 0, self.embed_dim)
+            gates = id_feat.new_zeros(B, 0, self.num_modalities)
+            return fused, gates
         
         # 投影到统一维度
         id_emb = self.id_proj(id_feat)      # [B, L, E]

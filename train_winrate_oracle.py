@@ -21,7 +21,7 @@ from model.win_rate_oracle import *
 
 torch.random.manual_seed(42)
 
-WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle-num_heroes_160-text-embd_dim_128"
+WIN_RATE_ORACLE_SAVE_DIR = "./ckpts/win_rate_oracle-num_heroes_160-text-embd_dim_128-player_attention"
 if not os.path.exists(WIN_RATE_ORACLE_SAVE_DIR):
     pathlib.Path(WIN_RATE_ORACLE_SAVE_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -200,18 +200,25 @@ class DOTAMatchDataset(Dataset):
 
         r_ids = match['r_ids']
         d_ids = match['d_ids']
+        r_player_feats = match['r_player_feats']
+        d_player_feats = match['d_player_feats']
+        
+        # 英雄和玩家分别独立shuffle（自注意力结构无需位置对应）
         random.shuffle(r_ids)
         random.shuffle(d_ids)
+        random.shuffle(r_player_feats)
+        random.shuffle(d_player_feats)
+        
         r_inputs = format_input(r_ids)
         d_inputs = format_input(d_ids)
         
         # 玩家特征 [5, NUM_HEROES]
-        r_player_feats = torch.tensor(match['r_player_feats'], dtype=torch.float32)
-        d_player_feats = torch.tensor(match['d_player_feats'], dtype=torch.float32)
+        r_player_feats_tensor = torch.tensor(r_player_feats, dtype=torch.float32)
+        d_player_feats_tensor = torch.tensor(d_player_feats, dtype=torch.float32)
         
         label = torch.tensor([match['label']], dtype=torch.float32)
         
-        return (*r_inputs, *d_inputs, r_player_feats, d_player_feats, label)
+        return (*r_inputs, *d_inputs, r_player_feats_tensor, d_player_feats_tensor, label)
     
 def train(load_model_path: str = None, epochs: int = 32):
     # 1. 初始化 TensorBoard Writer

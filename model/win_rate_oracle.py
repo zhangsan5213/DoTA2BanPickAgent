@@ -12,7 +12,7 @@ class PlayerHeroEncoder(nn.Module):
           （每个位置表示该玩家使用该英雄的胜率，0表示未玩过或场次不足）
     输出: [B, player_embed_dim] - 团队玩家特征
     """
-    def __init__(self, num_heroes=NUM_HEROES, hidden_dim=128, embed_dim=64):
+    def __init__(self, num_heroes=NUM_HEROES, hidden_dim=128, embed_dim=64, nhead=4, num_layers=2):
         super().__init__()
         self.num_heroes = num_heroes
         self.embed_dim = embed_dim
@@ -27,6 +27,16 @@ class PlayerHeroEncoder(nn.Module):
             nn.LayerNorm(embed_dim),
             nn.SiLU()
         )
+        
+        # 双向自注意力：5个玩家之间进行信息交互
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=nhead,
+            dim_feedforward=hidden_dim * 4,
+            batch_first=True,
+            dropout=0.1
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
         # 团队聚合（将5个玩家聚合成一个团队向量）
         self.team_aggregator = nn.Sequential(
@@ -51,6 +61,9 @@ class PlayerHeroEncoder(nn.Module):
         player_feats_flat = player_feats.view(-1, self.num_heroes)
         player_embeds = self.player_encoder(player_feats_flat)
         player_embeds = player_embeds.view(B, 5, self.embed_dim)
+        
+        # 双向自注意力交互：让玩家之间交换信息 [B, 5, embed_dim]
+        player_embeds = self.transformer(player_embeds)
         
         # 聚合成团队特征 [B, embed_dim]
         team_feat = self.team_aggregator(player_embeds.view(B, -1))
@@ -114,7 +127,9 @@ class WinRateOracle(nn.Module):
             self.player_encoder = PlayerHeroEncoder(
                 num_heroes=NUM_HEROES, 
                 hidden_dim=128, 
-                embed_dim=embed_dim
+                embed_dim=embed_dim,
+                nhead=4,
+                num_layers=2
             )
             # transformer输出 + 两个团队的玩家特征
             head_input_dim = embed_dim + embed_dim * 2

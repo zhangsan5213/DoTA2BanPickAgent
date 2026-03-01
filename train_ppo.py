@@ -258,6 +258,9 @@ class PPOTrainer:
         # 创建输出目录
         Path(config.output_dir).mkdir(parents=True, exist_ok=True)
         
+        # 进程池（延迟初始化，避免过早创建）
+        self._executor = None
+        
         # 加载Oracle（用于奖励计算，固定不训练）
         self.oracle = self._load_oracle()
         
@@ -290,13 +293,15 @@ class PPOTrainer:
         
         # 创建主模型（使用最新的模型，或新建）
         self.actor_critic = BPActorCritic(**self.model_config).to(self.device)
-        latest_model = self.get_latest_model()
+        # latest_model = self.get_latest_model()
+        latest_model = self.elo_manager.get_best_model()  # 优先使用ELO最高的模型
         if latest_model is not None:
             latest_id, latest_path = latest_model
             checkpoint = torch.load(latest_path, map_location=self.device)
             state_dict = checkpoint.get('model_state_dict', checkpoint)
             self.actor_critic.load_state_dict(state_dict)
-            print(f"\nLoaded latest model: {latest_id}")
+            # print(f"\nLoaded latest model: {latest_id}")
+            print(f"\nLoaded best model: {latest_id}")
         
         # 创建优化器
         self.optimizer = optim.Adam(
@@ -320,6 +325,9 @@ class PPOTrainer:
         # 日志
         self.train_logs = []
         self.iteration = 0
+        
+        # 进程池最大worker数
+        self._max_workers = min(os.cpu_count(), config.episodes_per_iter, 8)
         
         # TensorBoard writer
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -431,14 +439,24 @@ class PPOTrainer:
         
         return oracle
     
+    def _get_executor(self):
+        """获取进程池（延迟初始化）"""
+        if self._executor is None:
+            from concurrent.futures import ProcessPoolExecutor
+            self._executor = ProcessPoolExecutor(max_workers=self._max_workers)
+        return self._executor
+    
+    def shutdown_executor(self):
+        """关闭进程池"""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+    
     def collect_rollouts(self, num_episodes: int) -> Tuple[RolloutBuffer, RolloutBuffer]:
-        """收集trajectory（批量）- 多进程并行版本"""
-        from concurrent.futures import ProcessPoolExecutor, as_completed
-        import multiprocessing as mp
+        """收集trajectory（批量）- 多进程并行版本（使用持久化进程池）"""
+        from concurrent.futures import as_completed
         
-        # 确定并行worker数量
-        num_workers = min(mp.cpu_count(), num_episodes, 8)
-        print(f"  Using {num_workers} workers to collect {num_episodes} episodes...")
+        print(f"  Using {self._max_workers} workers to collect {num_episodes} episodes...")
         
         # 获取模型配置和状态字典
         model_config = {
@@ -453,34 +471,35 @@ class PPOTrainer:
         }
         actor_critic_state = self.actor_critic.state_dict()
         oracle_path = self.config.oracle_path
-        device = self.config.device
+        device = 'cpu'  # 强制使用CPU进行数据收集，避免CUDA内存碎片
         num_heroes = self.config.num_heroes
         
         # 并行收集
         r_buffer = RolloutBuffer()
         d_buffer = RolloutBuffer()
         
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            # 提交所有任务
-            futures = [
-                executor.submit(
-                    _collect_single_episode,
-                    model_config,
-                    actor_critic_state,
-                    oracle_path,
-                    device,
-                    num_heroes,
-                ) for _ in range(num_episodes)
-            ]
-            
-            # 收集结果
-            for future in tqdm(as_completed(futures), total=num_episodes, desc="Collecting", ncols=90):
-                try:
-                    r_rollout, d_rollout = future.result()
-                    r_buffer.add_rollout(r_rollout)
-                    d_buffer.add_rollout(d_rollout)
-                except Exception as e:
-                    print(f"Error in episode: {e}")
+        executor = self._get_executor()
+        
+        # 提交所有任务
+        futures = [
+            executor.submit(
+                _collect_single_episode,
+                model_config,
+                actor_critic_state,
+                oracle_path,
+                device,
+                num_heroes,
+            ) for _ in range(num_episodes)
+        ]
+        
+        # 收集结果
+        for future in tqdm(as_completed(futures), total=num_episodes, desc="Collecting", ncols=90):
+            try:
+                r_rollout, d_rollout = future.result()
+                r_buffer.add_rollout(r_rollout)
+                d_buffer.add_rollout(d_rollout)
+            except Exception as e:
+                print(f"Error in episode: {e}")
         
         return r_buffer, d_buffer
     
@@ -893,19 +912,25 @@ class PPOTrainer:
         wins = [m for m in match_results if m['won']]
         losses = [m for m in match_results if not m['won']]
         
-        # 随机选取2胜2负
+        # 随机选取：优先2胜2负，不够就全展示
         selected = []
-        if len(wins) >= 2:
-            selected.extend(random.sample(wins, 2))
-        else:
-            selected.extend(wins)
-        if len(losses) >= 2:
-            selected.extend(random.sample(losses, 2))
-        else:
-            selected.extend(losses)
+        # 尝试各选2个
+        win_target = min(2, len(wins))
+        loss_target = min(2, len(losses))
         
-        if len(selected) < 4:
-            print(f"Not enough matches to show (wins: {len(wins)}, losses: {len(losses)})")
+        # 如果一边不足2个，从另一边补足
+        if win_target < 2 and len(losses) > loss_target:
+            loss_target = min(4 - win_target, len(losses))
+        elif loss_target < 2 and len(wins) > win_target:
+            win_target = min(4 - loss_target, len(wins))
+        
+        if win_target > 0:
+            selected.extend(random.sample(wins, win_target))
+        if loss_target > 0:
+            selected.extend(random.sample(losses, loss_target))
+        
+        if len(selected) == 0:
+            print(f"No matches to show")
             return
         
         # 打印结果
@@ -948,17 +973,30 @@ class PPOTrainer:
     
     def _load_hero_names(self) -> Dict[int, str]:
         """加载英雄名称映射"""
+        # 优先从 hero_winrates.json 加载（包含ID到名称的映射）
+        hero_winrates_path = Path('./data/hero_winrates.json')
+        if hero_winrates_path.exists():
+            with open(hero_winrates_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 格式: {hero_id: {'name': hero_name, 'winrate': ...}, ...}
+                if isinstance(data, dict):
+                    return {
+                        int(k): v['name'] 
+                        for k, v in data.items() 
+                        if isinstance(v, dict) and 'name' in v
+                    }
+        
+        # 尝试 hero_names.json
         hero_names_path = Path('./data/hero_names.json')
         if hero_names_path.exists():
             with open(hero_names_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # 假设格式是 {hero_id: hero_name} 或 [{id: ..., name: ...}, ...]
                 if isinstance(data, dict):
                     return {int(k): v for k, v in data.items()}
                 elif isinstance(data, list):
                     return {int(item['id']): item['name'] for item in data if 'id' in item and 'name' in item}
         
-        # 尝试从其他文件加载
+        # 尝试 heroes.json
         hero_data_path = Path('./data/heroes.json')
         if hero_data_path.exists():
             with open(hero_data_path, 'r', encoding='utf-8') as f:
@@ -1085,6 +1123,10 @@ class PPOTrainer:
         
         # 关闭TensorBoard writer
         self.writer.close()
+        
+        # 关闭进程池
+        self.shutdown_executor()
+        
         print(f"TensorBoard logs closed")
 
 

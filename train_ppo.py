@@ -293,15 +293,15 @@ class PPOTrainer:
         
         # 创建主模型（使用最新的模型，或新建）
         self.actor_critic = BPActorCritic(**self.model_config).to(self.device)
-        # latest_model = self.get_latest_model()
-        latest_model = self.elo_manager.get_best_model()  # 优先使用ELO最高的模型
+        latest_model = self.get_latest_model()
+        # latest_model = self.elo_manager.get_best_model()  # 优先使用ELO最高的模型
         if latest_model is not None:
             latest_id, latest_path = latest_model
             checkpoint = torch.load(latest_path, map_location=self.device)
             state_dict = checkpoint.get('model_state_dict', checkpoint)
             self.actor_critic.load_state_dict(state_dict)
-            # print(f"\nLoaded latest model: {latest_id}")
-            print(f"\nLoaded best model: {latest_id}")
+            print(f"\nLoaded latest model: {latest_id}")
+            # print(f"\nLoaded best model: {latest_id}")
         
         # 创建优化器
         self.optimizer = optim.Adam(

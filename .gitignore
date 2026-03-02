@@ -1,3 +1,5 @@
 *.pyc
 
 data/high_mmr_with_stats-*.json
+
+ckpts\ppo_bp\

@@ -220,7 +220,7 @@ class DOTAMatchDataset(Dataset):
         
         return (*r_inputs, *d_inputs, r_player_feats_tensor, d_player_feats_tensor, label)
     
-def train(load_model_path: str = None, epochs: int = 32):
+def train(load_model_path: str = None, epochs: int = 32, terminal_win_rate_threshold: float = 0.90):
     # 1. 初始化 TensorBoard Writer
     # 日志会保存在 ./runs 目录下，按时间戳区分实验
     log_dir = os.path.join("runs", "win_rate_exp_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -314,7 +314,7 @@ def train(load_model_path: str = None, epochs: int = 32):
         writer.add_scalar('Epoch/Accuracy', avg_acc, epoch)
 
         # 保存模型
-        if avg_acc > 0.90:  # 只保存准确率超过90%的模型
+        if avg_acc > terminal_win_rate_threshold:  # 只保存准确率超过指定阈值的模型
             acc = avg_acc
             epoch_str = str(epoch).rjust(len(str(epochs)), '0')
             torch.save(model.state_dict(), os.path.join(WIN_RATE_ORACLE_SAVE_DIR, f"win_rate_oracle-{datetime_str}-{epoch_str}-{avg_acc:.4f}.pth"))
@@ -324,16 +324,17 @@ def train(load_model_path: str = None, epochs: int = 32):
     writer.close()
 
 if __name__ == "__main__":
-    # print('='*20 + ' 更新比赛数据 ' + '='*20)
-    # fetch_high_mmr_matches(
-    #     output_file='./data/high_mmr_with_stats-rank_40-duration_15.json',  # 使用合并后的数据文件
-    #     target_count=100000,
-    #     min_rank=40,
-    #     min_duration=15 * 60,
-    # )
+    print('='*20 + ' 更新比赛数据 ' + '='*20)
+    fetch_high_mmr_matches(
+        output_file='./data/high_mmr_with_stats-rank_40-duration_15.json',  # 使用合并后的数据文件
+        target_count=100000,
+        min_rank=40,
+        min_duration=15 * 60,
+    )
 
     print('='*20 + ' 训练 WinRateOracle ' + '='*20)
     train(
-        # load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20260203224235-096-0.9865.pth'),
+        load_model_path=os.path.join(WIN_RATE_ORACLE_SAVE_DIR, 'win_rate_oracle-20260228235818-083-0.9055.pth'),
         epochs=128,
+        terminal_win_rate_threshold=0.9,
     )

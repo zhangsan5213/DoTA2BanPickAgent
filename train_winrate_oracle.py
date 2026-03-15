@@ -17,6 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.raw_data import HERO_ID_FEATURE_MAP, HERO_ID_SEMANTIC_MAP, NUM_HEROES
 from utils.get_data_cm_bp import fetch_high_mmr_matches
+from utils.device import DEVICE
 from model.win_rate_oracle import *
 
 torch.random.manual_seed(42)
@@ -258,7 +259,7 @@ def train(load_model_path: str = None, epochs: int = 32, terminal_win_rate_thres
         if found := re.findall(r'win_rate_oracle-(\d+)-(\d+)-(.+).pth$', load_model_path):
             acc = float(found[0][-1])
             print(f"[+] 初始准确率: {acc}")
-        model.load_state_dict(torch.load(load_model_path))
+        model.load_state_dict(torch.load(load_model_path, map_location=DEVICE))
     else:
         print(f"[+] 未加载预训练模型 ...")
         acc = 0

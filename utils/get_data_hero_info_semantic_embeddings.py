@@ -1,6 +1,7 @@
 import json
 import torch
 from sentence_transformers import SentenceTransformer
+from utils.device import DEVICE
 
 # 1. 准备数据 (这里根据你提供的 JSON 结构进行模拟)
 with open('./data/hero_ability_descriptions.json', 'r', encoding='utf-8') as f:
@@ -36,4 +37,4 @@ torch.save(save_data, './data/hero_semantic_embeddings.pt')
 print("编码完成并已保存至 ./data/hero_semantic_embeddings.pt")
 
 # --- 验证加载 ---
-loaded_data = torch.load('./data/hero_semantic_embeddings.pt')
+loaded_data = torch.load('./data/hero_semantic_embeddings.pt', map_location=DEVICE)

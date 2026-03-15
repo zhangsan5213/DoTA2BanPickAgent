@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from typing import Dict
 
+from utils.device import DEVICE
+
 # 缓存变量
 _HERO_FEATURES = None
 _HERO_SEMANTIC_EMBEDDINGS = None
@@ -25,7 +27,7 @@ def _load_semantic_embeddings():
     """延迟加载语义嵌入数据"""
     global _HERO_SEMANTIC_EMBEDDINGS, _HERO_ID_SEMANTIC_MAP
     if _HERO_SEMANTIC_EMBEDDINGS is None:
-        _HERO_SEMANTIC_EMBEDDINGS = torch.load("./data/hero_semantic_embeddings.pt")
+        _HERO_SEMANTIC_EMBEDDINGS = torch.load("./data/hero_semantic_embeddings.pt", map_location=DEVICE)
         # 确保特征数据已加载
         hero_features, _ = _load_hero_features()
         _HERO_ID_SEMANTIC_MAP = {

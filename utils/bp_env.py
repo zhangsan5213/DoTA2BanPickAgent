@@ -5,9 +5,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 import torch
 import torch.nn.functional as F
+from utils.device import DEVICE
 from utils.raw_data import NUM_HEROES
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class BPState:
@@ -86,10 +85,16 @@ class BPState:
 GAMMA = 0.99
 LAMBDA = 0.95
 CLIP_EPS = 0.2
+VALUE_CLIP_EPS = 0.2  # Value clipping epsilon
 
 
-def compute_gae(rewards, values, dones, gamma=GAMMA, lam=LAMBDA):
-    """Compute GAE advantages and returns"""
+def compute_gae(rewards, values, dones, gamma=GAMMA, lam=LAMBDA, normalize_returns=False):
+    """
+    Compute GAE advantages and returns
+    
+    Args:
+        normalize_returns: 是否对returns做归一化（减少value估计的方差）
+    """
     # Handle 1D input (single trajectory)
     if rewards.dim() == 1:
         rewards = rewards.unsqueeze(-1)
@@ -112,15 +117,75 @@ def compute_gae(rewards, values, dones, gamma=GAMMA, lam=LAMBDA):
         advantages = advantages.squeeze(-1)
         returns = returns.squeeze(-1)
 
+    # Return normalization (optional but recommended for stability)
+    if normalize_returns and returns.numel() > 1:
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+
     return advantages, returns
 
 
+def normalize_advantages(advantages, eps=1e-8):
+    """
+    Advantage归一化 - 关键trick，能显著提高PPO稳定性
+    
+    归一化后的advantages有:
+    - 零均值: 避免policy偏向正advantage的方向
+    - 单位方差: 控制梯度大小，使学习率更稳定
+    """
+    if advantages.numel() <= 1:
+        return advantages
+    return (advantages - advantages.mean()) / (advantages.std() + eps)
+
+
 def ppo_loss(log_probs, old_log_probs, advantages, clip_eps=CLIP_EPS):
-    """PPO policy loss"""
+    """PPO policy loss (使用归一化后的advantages)"""
     ratio = torch.exp(log_probs - old_log_probs)
     surr1 = ratio * advantages
     surr2 = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * advantages
     return -torch.min(surr1, surr2).mean()
+
+
+def compute_value_loss(
+    new_values, 
+    old_values, 
+    returns, 
+    clip_eps=VALUE_CLIP_EPS,
+    use_clipping=True
+):
+    """
+    PPO Value Loss with optional clipping
+    
+    Args:
+        new_values: 当前value network预测值 [T]
+        old_values: 收集trajectory时的value预测值 [T+1] (包含bootstrap)
+        returns: GAE计算的returns [T]
+        clip_eps: value clipping系数
+        use_clipping: 是否使用clipping
+    
+    Returns:
+        value_loss: scalar
+    """
+    # 注意: old_values长度是T+1，需要截断到T
+    old_values_clipped = old_values[:-1] if old_values.shape[0] > returns.shape[0] else old_values
+    
+    if use_clipping:
+        # PPO-style value clipping: 限制value update幅度
+        # 这防止value network一次更新过大，保持与policy更新同步
+        value_pred_clipped = old_values_clipped + torch.clamp(
+            new_values - old_values_clipped,
+            -clip_eps,
+            clip_eps
+        )
+        
+        # 两个loss取较大的那个（即更保守的更新）
+        value_loss1 = F.mse_loss(new_values, returns, reduction='mean')
+        value_loss2 = F.mse_loss(value_pred_clipped, returns, reduction='mean')
+        value_loss = torch.max(value_loss1, value_loss2)
+    else:
+        # 普通MSE (原版PPO论文也支持这种)
+        value_loss = F.mse_loss(new_values, returns, reduction='mean')
+    
+    return value_loss
 
 
 def collect_rollout(agent, oracle, sample, max_steps=20):

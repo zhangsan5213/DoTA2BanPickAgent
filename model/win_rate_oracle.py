@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from model.hero_encoder import MultiModalHeroEncoder, NUM_HEROES, NUM_HERO_FEATURES
 from utils.raw_data import HERO_ID_FEATURE_MAP, HERO_ID_SEMANTIC_MAP
+from utils.device import DEVICE
 
 
 class PlayerHeroEncoder(nn.Module):
@@ -167,7 +168,7 @@ class WinRateOracle(nn.Module):
         
         if use_text:
             self.register_buffer("all_hero_sem", torch.stack([
-                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024).cuda())
+                HERO_ID_SEMANTIC_MAP.get(hero_id, torch.zeros(1024)).to(DEVICE)
                 for hero_id in range(1, NUM_HEROES + 1)
             ]), persistent=False)
         else:

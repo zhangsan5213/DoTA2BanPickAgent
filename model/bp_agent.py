@@ -12,6 +12,32 @@ ACTION_DIM = 8
 EMBED_DIM = 128
 
 
+def init_weights(module):
+    """
+    统一的权重初始化函数
+    - Embedding: uniform_(-0.1, 0.1)
+    - Linear: orthogonal_(gain=0.01) + bias=0 (适用于 actor/value head)
+    - LayerNorm: weight=1.0, bias=0.0
+    """
+    if isinstance(module, nn.Linear):
+        nn.init.orthogonal_(module.weight, gain=0.01)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+    elif isinstance(module, nn.Embedding):
+        nn.init.uniform_(module.weight, -0.1, 0.1)
+    elif isinstance(module, nn.LayerNorm):
+        # 只有当 elementwise_affine=True 时才初始化 weight 和 bias
+        if module.elementwise_affine:
+            nn.init.constant_(module.weight, 1.0)
+            nn.init.constant_(module.bias, 0.0)
+
+
+def init_embedding(module):
+    """Embedding 层统一使用 uniform_(-0.1, 0.1)"""
+    if isinstance(module, nn.Embedding):
+        nn.init.uniform_(module.weight, -0.1, 0.1)
+
+
 class ActionEncoder(nn.Module):
     """Encode BP actions: (actor_team, action_type, target_hero)"""
     def __init__(self, embed_dim=EMBED_DIM):
@@ -76,6 +102,9 @@ class BPTransformerAgent(nn.Module):
             HERO_ID_FEATURE_MAP.get(h, torch.zeros(NUM_HERO_FEATURES))
             for h in range(1, NUM_HEROES + 1)
         ]))
+
+        # 应用统一的权重初始化，保证初始策略分布均匀，避免初始策略塌缩
+        self.apply(init_weights)
 
     def forward(self, state):
         """

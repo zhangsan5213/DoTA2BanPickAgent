@@ -590,7 +590,7 @@ class BPBattleSimulator(BattleSimulatorBase):
         d_players = player_set['d_players']
         
         # 创建 BP 状态
-        state = BPState([], [], r_players, d_players, is_radiant_turn=True)
+        state = BPState([], [], r_players, d_players, radiant_bans=[], dire_bans=[], is_radiant_turn=True, step_idx=0)
         
         # 运行 BP 过程
         step = 0
@@ -613,9 +613,9 @@ class BPBattleSimulator(BattleSimulatorBase):
                 # 选择英雄（贪心策略）
                 hero_id = torch.argmax(action_logits, dim=-1).item() + 1
             
-            # 判断是 pick 还是 ban
-            is_pick = state.pick_count['radiant'] + state.pick_count['dire'] < 10
-            state.step(hero_id, is_pick)
+            # 判断是 pick 还是 ban (使用CM序列)
+            is_pick = (state.get_current_action_type() == 'pick')
+            state.step(hero_id)
             step += 1
         
         # 使用 Oracle 判断胜负
@@ -707,6 +707,8 @@ class BPBattleSimulator(BattleSimulatorBase):
             )
             
             # 构建玩家特征向量 [5, NUM_HEROES]
+            from utils.raw_data import get_valid_hero_ids
+            valid_hero_ids = get_valid_hero_ids()
             def build_player_features(players):
                 features = []
                 for p in players:
@@ -714,8 +716,9 @@ class BPBattleSimulator(BattleSimulatorBase):
                     for hero_info in p['heroes']:
                         hero_id = hero_info['id']
                         win_rate = hero_info['win_rate']
-                        if 0 < hero_id < NUM_HEROES:
-                            vector[hero_id] = win_rate
+                        # 只添加实际存在的英雄
+                        if hero_id in valid_hero_ids and hero_id <= NUM_HEROES:
+                            vector[hero_id - 1] = win_rate  # 修正索引
                     features.append(vector)
                 return features
             

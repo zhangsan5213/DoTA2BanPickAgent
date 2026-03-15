@@ -483,12 +483,16 @@ class OracleTrainingDataset(torch.utils.data.Dataset):
                 except (ValueError, TypeError):
                     continue
             
+            from utils.raw_data import get_valid_hero_ids
+            valid_hero_ids = get_valid_hero_ids()
+            
             hero_list.sort(key=lambda x: x[1], reverse=True)
             
             vector = [0.0] * NUM_HEROES
             for hero_id, games, winrate in hero_list[:self.max_heroes_per_player]:
-                if 0 < hero_id < NUM_HEROES and games >= self.min_games_per_hero:
-                    vector[hero_id] = winrate
+                # 只添加实际存在的英雄
+                if hero_id in valid_hero_ids and hero_id <= NUM_HEROES and games >= self.min_games_per_hero:
+                    vector[hero_id - 1] = winrate  # 修正索引
             
             vectors.append(vector)
         

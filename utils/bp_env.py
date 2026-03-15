@@ -6,22 +6,70 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import torch
 import torch.nn.functional as F
 from utils.device import DEVICE
-from utils.raw_data import NUM_HEROES
+from utils.raw_data import NUM_HEROES, get_valid_hero_ids
 
 
 class BPState:
-    """BP environment state"""
-    def __init__(self, radiant_heroes, dire_heroes, radiant_players, dire_players, is_radiant_turn):
+    """
+    BP environment state - 实现标准CM模式
+    
+    CM BP顺序（共20步）：
+    1. Ban Phase 1:  R, D, R, D (4 bans)
+    2. Pick Phase 1: R, D, D, R (4 picks)
+    3. Ban Phase 2:  D, R, D, R (4 bans)
+    4. Pick Phase 2: D, R, R, D (4 picks)
+    5. Ban Phase 3:  R, D (2 bans)
+    6. Pick Phase 3: R, D (2 picks)
+    
+    总共：10 bans + 10 picks (每队5 ban 5 pick)
+    """
+    
+    # CM模式BP顺序定义: (team, action_type)
+    # team: 0=Radiant, 1=Dire
+    # action_type: 'ban' or 'pick'
+    CM_SEQUENCE = [
+        # Ban Phase 1
+        (0, 'ban'), (1, 'ban'), (0, 'ban'), (1, 'ban'),
+        # Pick Phase 1
+        (0, 'pick'), (1, 'pick'), (1, 'pick'), (0, 'pick'),
+        # Ban Phase 2
+        (1, 'ban'), (0, 'ban'), (1, 'ban'), (0, 'ban'),
+        # Pick Phase 2
+        (1, 'pick'), (0, 'pick'), (0, 'pick'), (1, 'pick'),
+        # Ban Phase 3
+        (0, 'ban'), (1, 'ban'),
+        # Pick Phase 3
+        (0, 'pick'), (1, 'pick'),
+    ]
+    
+    def __init__(self, radiant_heroes, dire_heroes, radiant_players, dire_players, 
+                 radiant_bans=None, dire_bans=None, is_radiant_turn=True, step_idx=0):
         self.radiant_heroes = list(radiant_heroes)
         self.dire_heroes = list(dire_heroes)
+        self.radiant_bans = list(radiant_bans) if radiant_bans else []
+        self.dire_bans = list(dire_bans) if dire_bans else []
         self.radiant_players = radiant_players
         self.dire_players = dire_players
         self.history = {'teams': [], 'actions': [], 'heroes': []}
-        self.is_radiant_turn = is_radiant_turn
+        self.step_idx = step_idx  # 当前在CM_SEQUENCE中的位置
         self.done = False
-        self.pick_count = {'radiant': 0, 'dire': 0}
-        self.ban_count = {'radiant': 0, 'dire': 0}
-
+        self.pick_count = {'radiant': len(self.radiant_heroes), 'dire': len(self.dire_heroes)}
+        self.ban_count = {'radiant': len(self.radiant_bans), 'dire': len(self.dire_bans)}
+        
+        # 根据step_idx设置当前轮到谁
+        if step_idx < len(self.CM_SEQUENCE):
+            team, _ = self.CM_SEQUENCE[step_idx]
+            self.is_radiant_turn = (team == 0)
+        else:
+            self.is_radiant_turn = is_radiant_turn
+    
+    def get_current_action_type(self):
+        """获取当前步骤的动作类型: 'ban' 或 'pick'"""
+        if self.step_idx < len(self.CM_SEQUENCE):
+            _, action_type = self.CM_SEQUENCE[self.step_idx]
+            return action_type
+        return 'pick'  # 默认pick
+    
     def to_dict(self, device=DEVICE):
         # Handle both list and tensor inputs
         if not isinstance(self.radiant_players, torch.Tensor):
@@ -32,6 +80,10 @@ class BPState:
             d_feats = torch.tensor(self.dire_players).float()
         else:
             d_feats = self.dire_players.float()
+            
+        # 确定当前action类型: 1=pick, 2=ban
+        current_action_type = 1 if self.get_current_action_type() == 'pick' else 2
+            
         return {
             'radiant_player_feats': r_feats.unsqueeze(0).to(device),
             'dire_player_feats': d_feats.unsqueeze(0).to(device),
@@ -41,10 +93,21 @@ class BPState:
                 'heroes': torch.tensor(self.history['heroes'], dtype=torch.long, device=device).unsqueeze(0) if self.history['heroes'] else torch.zeros(1, 0, dtype=torch.long, device=device),
             },
             'current_actor': torch.tensor([0 if self.is_radiant_turn else 1], device=device),
-            'current_action': torch.tensor([1 if self.pick_count['radiant'] + self.pick_count['dire'] < 10 else 2], device=device),
+            'current_action': torch.tensor([current_action_type], device=device),
         }
 
-    def step(self, hero_id, is_pick):
+    def step(self, hero_id, is_pick=None):
+        """
+        执行一步BP
+        
+        Args:
+            hero_id: 英雄ID (1-based)
+            is_pick: 可选，如果不提供则根据当前step_idx自动判断
+        """
+        # 如果没提供is_pick，根据CM序列自动判断
+        if is_pick is None:
+            is_pick = (self.get_current_action_type() == 'pick')
+        
         self.history['teams'].append(0 if self.is_radiant_turn else 1)
         self.history['actions'].append(1 if is_pick else 2)
         self.history['heroes'].append(hero_id - 1)
@@ -58,19 +121,30 @@ class BPState:
                 self.pick_count['dire'] += 1
         else:
             if self.is_radiant_turn:
+                self.radiant_bans.append(hero_id)
                 self.ban_count['radiant'] += 1
             else:
+                self.dire_bans.append(hero_id)
                 self.ban_count['dire'] += 1
 
+        # 推进到下一步
+        self.step_idx += 1
+        
+        # 检查是否结束（完成20步或pick满10个）
         total_picks = self.pick_count['radiant'] + self.pick_count['dire']
-        if total_picks >= 10:
+        if total_picks >= 10 or self.step_idx >= len(self.CM_SEQUENCE):
             self.done = True
+            self.is_radiant_turn = not self.is_radiant_turn  # 保持上一步的对方
         else:
-            self.is_radiant_turn = not self.is_radiant_turn
+            # 根据序列设置下一个turn
+            next_team, _ = self.CM_SEQUENCE[self.step_idx]
+            self.is_radiant_turn = (next_team == 0)
 
     def get_valid_actions(self):
-        used = set(self.radiant_heroes + self.dire_heroes)
-        return [h for h in range(1, NUM_HEROES + 1) if h not in used]
+        """获取当前可用的英雄ID列表（实际存在且未被ban/pick）"""
+        used = set(self.radiant_heroes + self.dire_heroes + self.radiant_bans + self.dire_bans)
+        valid_ids = get_valid_hero_ids()
+        return [h for h in valid_ids if h not in used]
 
     def get_reward(self, oracle):
         if not self.done:
@@ -188,9 +262,10 @@ def compute_value_loss(
     return value_loss
 
 
-def collect_rollout(agent, oracle, sample, max_steps=20):
+def collect_rollout(agent, oracle, sample, max_steps=24):
     """Collect one BP trajectory"""
-    s = BPState([], [], sample['r_players'], sample['d_players'], is_radiant_turn=True)
+    s = BPState([], [], sample['r_players'], sample['d_players'], 
+                radiant_bans=[], dire_bans=[], is_radiant_turn=True, step_idx=0)
 
     states, actions, log_probs, values, rewards = [], [], [], [], []
 
@@ -204,9 +279,18 @@ def collect_rollout(agent, oracle, sample, max_steps=20):
         if not valid_actions:
             break
 
+        # 创建mask：只允许选择实际存在且未被使用的英雄
         mask = torch.full((NUM_HEROES,), -1e9, device=action_logits.device)
-        for h in valid_actions:
-            mask[h - 1] = 0.0
+        # 先屏蔽所有不存在的英雄
+        all_valid_ids = get_valid_hero_ids()
+        for h in all_valid_ids:
+            if h <= NUM_HEROES:
+                mask[h - 1] = 0.0
+        # 再屏蔽已使用的英雄（包括ban和pick）
+        used = set(s.radiant_heroes + s.dire_heroes + s.radiant_bans + s.dire_bans)
+        for h in used:
+            if h <= NUM_HEROES:
+                mask[h - 1] = -1e9
         action_logits = action_logits + mask
 
         probs = F.softmax(action_logits, dim=-1)
@@ -215,8 +299,8 @@ def collect_rollout(agent, oracle, sample, max_steps=20):
         hero_id = dist.sample().item() + 1
         log_prob = dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
 
-        is_pick = s.pick_count['radiant'] + s.pick_count['dire'] < 10
-        s.step(hero_id, is_pick)
+        # 根据当前BP状态自动判断是ban还是pick
+        s.step(hero_id)
 
         states.append(state_dict)
         actions.append(hero_id - 1)
@@ -241,28 +325,44 @@ def collect_rollout(agent, oracle, sample, max_steps=20):
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("Testing BP Environment")
+    print("Testing BP Environment with CM Mode")
     print("=" * 50)
 
-    # Test BPState
+    # Test BPState with CM sequence
     player_feats = [[0.0] * NUM_HEROES for _ in range(5)]
     player_feats[0][10] = 0.6  # 玩家1擅长英雄10
 
     s = BPState([], [], player_feats, player_feats, is_radiant_turn=True)
 
     print(f"Initial state - radiant turn: {s.is_radiant_turn}")
+    print(f"CM Sequence length: {len(s.CM_SEQUENCE)}")
+    print(f"Step 0: team={s.CM_SEQUENCE[0][0]}, action={s.CM_SEQUENCE[0][1]}")
     print(f"Valid actions count: {len(s.get_valid_actions())}")
-
-    # Test step
-    s.step(10, is_pick=True)
-    print(f"After pick hero 10 - radiant heroes: {s.radiant_heroes}")
-    print(f"Valid actions count: {len(s.get_valid_actions())}")
-
-    # Test to_dict
-    state_dict = s.to_dict()
-    print(f"state_dict keys: {state_dict.keys()}")
-    print(f"radiant_player_feats shape: {state_dict['radiant_player_feats'].shape}")
-    print(f"action_history teams: {state_dict['action_history']['teams']}")
+    
+    # Test full BP sequence
+    print("\n--- Testing full BP sequence ---")
+    for i in range(len(s.CM_SEQUENCE)):
+        team, action_type = s.CM_SEQUENCE[i]
+        team_name = "Radiant" if team == 0 else "Dire"
+        valid_count = len(s.get_valid_actions())
+        print(f"Step {i}: {team_name} {action_type.upper()} (valid heroes: {valid_count})")
+        
+        # 模拟选择第一个可用英雄
+        valid_actions = s.get_valid_actions()
+        if valid_actions:
+            hero_id = valid_actions[0]
+            s.step(hero_id)
+        
+        if s.done:
+            print(f"BP finished at step {i+1}")
+            break
+    
+    print(f"\nFinal Radiant picks: {s.radiant_heroes}")
+    print(f"Final Dire picks: {s.dire_heroes}")
+    print(f"Final Radiant bans: {s.radiant_bans}")
+    print(f"Final Dire bans: {s.dire_bans}")
+    print(f"Pick count: {s.pick_count}")
+    print(f"Ban count: {s.ban_count}")
 
     # Test GAE
     print("\n--- Testing GAE ---")

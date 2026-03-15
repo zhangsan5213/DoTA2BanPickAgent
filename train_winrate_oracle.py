@@ -100,9 +100,12 @@ class DOTAMatchDataset(Dataset):
             hero_list.sort(key=lambda x: x[1], reverse=True)
             
             vector = [0.0] * num_heroes
+            # 导入有效英雄ID集合
+            from utils.raw_data import get_valid_hero_ids
+            valid_hero_ids = get_valid_hero_ids()
             for hero_id, games, winrate in hero_list[:max_heroes_per_player]:
-                # 只记录有足够场次的英雄胜率，且hero_id在有效范围内
-                if 0 < hero_id < num_heroes and games >= min_games:
+                # 只记录有足够场次且实际存在的英雄
+                if hero_id in valid_hero_ids and hero_id < num_heroes and games >= min_games:
                     vector[hero_id] = winrate
             
             vectors.append(vector)

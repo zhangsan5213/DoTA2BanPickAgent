@@ -183,13 +183,16 @@ class BPDataset(Dataset):
 
     def _player_prefs_to_feats(self, player_prefs):
         """将玩家偏好转换为特征向量 [5, NUM_HEROES]"""
+        from utils.raw_data import get_valid_hero_ids
+        valid_hero_ids = get_valid_hero_ids()
         feats = []
         for p in player_prefs:
             vec = [0.0] * NUM_HEROES
             for h in p['heroes']:
                 hero_id = h['id']
                 win_rate = h['win_rate']
-                if 0 < hero_id <= NUM_HEROES:
+                # 只添加实际存在的英雄
+                if hero_id in valid_hero_ids and hero_id <= NUM_HEROES:
                     vec[hero_id - 1] = win_rate  # hero_id是1-based，转为0-based索引
             feats.append(vec)
         while len(feats) < 5:

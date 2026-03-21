@@ -262,18 +262,39 @@ def compute_value_loss(
     return value_loss
 
 
-def collect_rollout(agent, oracle, sample, max_steps=24):
-    """Collect one BP trajectory"""
-    s = BPState([], [], sample['r_players'], sample['d_players'], 
+def collect_rollout(agent, oracle, sample, max_steps=24, opponent_agent=None, current_side="radiant"):
+    """Collect one BP trajectory.
+
+    Args:
+        agent: The current agent (on-policy training target).
+        oracle: Win rate oracle.
+        sample: BP sample with r_players/d_players.
+        max_steps: Max BP steps.
+        opponent_agent: If provided, this agent plays the opposite side. If None, agent
+            plays both sides (self-play).
+        current_side: "radiant" or "dire" - which side the current agent plays on.
+            Only relevant when opponent_agent is not None.
+    """
+    s = BPState([], [], sample['r_players'], sample['d_players'],
                 radiant_bans=[], dire_bans=[], is_radiant_turn=True, step_idx=0)
 
-    states, actions, log_probs, values, rewards = [], [], [], [], []
+    states, actions, log_probs, values, rewards, valid_mask = [], [], [], [], [], []
 
     step = 0
     while not s.done and step < max_steps:
         state_dict = s.to_dict()
+
+        is_radiant_turn = s.is_radiant_turn
+        if opponent_agent is None:
+            active_agent = agent
+        else:
+            if is_radiant_turn:
+                active_agent = agent if current_side == "radiant" else opponent_agent
+            else:
+                active_agent = agent if current_side == "dire" else opponent_agent
+
         with torch.no_grad():
-            action_logits, value = agent(state_dict)
+            action_logits, value = active_agent(state_dict)
 
         valid_actions = s.get_valid_actions()
         if not valid_actions:
@@ -281,12 +302,10 @@ def collect_rollout(agent, oracle, sample, max_steps=24):
 
         # 创建mask：只允许选择实际存在且未被使用的英雄
         mask = torch.full((NUM_HEROES,), -1e9, device=action_logits.device)
-        # 先屏蔽所有不存在的英雄
         all_valid_ids = get_valid_hero_ids()
         for h in all_valid_ids:
             if h <= NUM_HEROES:
                 mask[h - 1] = 0.0
-        # 再屏蔽已使用的英雄（包括ban和pick）
         used = set(s.radiant_heroes + s.dire_heroes + s.radiant_bans + s.dire_bans)
         for h in used:
             if h <= NUM_HEROES:
@@ -299,13 +318,19 @@ def collect_rollout(agent, oracle, sample, max_steps=24):
         hero_id = dist.sample().item() + 1
         log_prob = dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
 
-        # 根据当前BP状态自动判断是ban还是pick
-        s.step(hero_id)
+        # Mark whether this step belongs to the current agent
+        if opponent_agent is None:
+            is_current = True
+        else:
+            is_current = (current_side == "radiant") if is_radiant_turn else (current_side == "dire")
 
         states.append(state_dict)
         actions.append(hero_id - 1)
         log_probs.append(log_prob)
         values.append(value.item())
+        valid_mask.append(is_current)
+
+        s.step(hero_id)
         step += 1
 
     final_reward = s.get_reward(oracle)
@@ -320,6 +345,7 @@ def collect_rollout(agent, oracle, sample, max_steps=24):
         'log_probs': torch.stack(log_probs),
         'values': torch.tensor(values + [final_reward], dtype=torch.float32),
         'rewards': torch.tensor(rewards, dtype=torch.float32),
+        'valid_mask': torch.tensor(valid_mask, dtype=torch.bool),
     }
 
 

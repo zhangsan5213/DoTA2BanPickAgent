@@ -295,17 +295,40 @@ def train(config_path: str = None, **override_kwargs):
             rollouts = []
 
             # Historical opponent rollouts: current agent randomly plays Radiant or Dire
+            # 优化：先计算需要使用哪些历史模型、各几场，然后批量加载重复使用
             if num_hist > 0 and historical_checkpoints:
+                # 1. 计算这个 batch 需要与哪些历史模型对战、各几场
+                hist_assignments = []  # [(sample_idx, ckpt_idx, ckpt_path), ...]
                 for i in range(num_hist):
-                    sample = batch_samples[i]
+                    sample_idx = i
                     ckpt_idx = (batch_idx * actual_rollout_steps + i) % len(historical_checkpoints)
                     ckpt_path, _ = historical_checkpoints[ckpt_idx]
+                    hist_assignments.append((sample_idx, ckpt_idx, ckpt_path))
+                
+                # 2. 按模型分组，统计每个模型需要对战场数
+                ckpt_idx_to_samples = {}  # {ckpt_idx: [sample_idx, ...]}
+                for sample_idx, ckpt_idx, ckpt_path in hist_assignments:
+                    if ckpt_idx not in ckpt_idx_to_samples:
+                        ckpt_idx_to_samples[ckpt_idx] = []
+                    ckpt_idx_to_samples[ckpt_idx].append((sample_idx, ckpt_path))
+                
+                # 3. 逐个加载历史模型，完成所有分配给它的对局
+                for ckpt_idx, sample_list in ckpt_idx_to_samples.items():
+                    ckpt_path = sample_list[0][1]  # 获取模型路径
+                    
+                    # 加载模型一次
                     opponent = BPTransformerAgent(embed_dim=EMBED_DIM, nhead=8, num_layers=4).to(DEVICE)
                     opponent.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
                     opponent.eval()
-                    current_side = random.choice(["radiant", "dire"])
-                    rollout = collect_rollout(agent, oracle, sample, opponent_agent=opponent, current_side=current_side)
-                    rollouts.append(rollout)
+                    
+                    # 用这个模型完成所有分配的对局
+                    for sample_idx, _ in sample_list:
+                        sample = batch_samples[sample_idx]
+                        current_side = random.choice(["radiant", "dire"])
+                        rollout = collect_rollout(agent, oracle, sample, opponent_agent=opponent, current_side=current_side)
+                        rollouts.append(rollout)
+                    
+                    # 完成后清理
                     del opponent
 
             # Self-play rollouts (agent plays both sides)
@@ -437,7 +460,7 @@ def train(config_path: str = None, **override_kwargs):
             num_player_sets = rating_cfg.get("num_player_sets", 16)
             
             print(f"[+] {method_name} evaluation at epoch {epoch+1}...")
-            rating_evaluator.evaluate(
+            eval_result = rating_evaluator.evaluate(
                 model_path=checkpoint_path,
                 num_opponents=num_opponents,
                 num_player_sets=num_player_sets
@@ -448,8 +471,23 @@ def train(config_path: str = None, **override_kwargs):
             
             # 记录模型评分到 TensorBoard
             if writer is not None:
-                rating = rating_evaluator.get_rating(checkpoint_path)
-                writer.add_scalar(f"Rating/{method_name.lower()}", rating, epoch + 1)
+                # 获取评估结果中的各项指标
+                record = rating_evaluator.rating_manager.get_record(checkpoint_path)
+                if record is not None:
+                    if method.lower() == "trueskill":
+                        # TrueSkill: 记录 mu, sigma, rating, avg_winrate
+                        writer.add_scalar(f"Rating/{method_name.lower()}_mu", record.mu, epoch + 1)
+                        writer.add_scalar(f"Rating/{method_name.lower()}_sigma", record.sigma, epoch + 1)
+                        writer.add_scalar(f"Rating/{method_name.lower()}_rating", record.rating, epoch + 1)
+                    else:
+                        # ELO: 只记录 rating
+                        writer.add_scalar(f"Rating/{method_name.lower()}_rating", record.elo, epoch + 1)
+                    
+                    # 计算并记录本轮平均胜率
+                    if eval_result.get('results'):
+                        avg_winrate = sum(r['win_rate'] for r in eval_result['results']) / len(eval_result['results'])
+                        writer.add_scalar("Rating/avg_winrate", avg_winrate, epoch + 1)
+                
                 writer.flush()  # 确保数据立即写入
 
     # Save final model
@@ -470,8 +508,14 @@ def train(config_path: str = None, **override_kwargs):
     
     # 记录最终模型评分到 TensorBoard
     if writer is not None:
-        final_rating = rating_evaluator.get_rating(model_path)
-        writer.add_scalar(f"Rating/{method_name.lower()}", final_rating, epochs)
+        record = rating_evaluator.rating_manager.get_record(model_path)
+        if record is not None:
+            if method.lower() == "trueskill":
+                writer.add_scalar(f"Rating/{method_name.lower()}_mu", record.mu, epochs)
+                writer.add_scalar(f"Rating/{method_name.lower()}_sigma", record.sigma, epochs)
+                writer.add_scalar(f"Rating/{method_name.lower()}_rating", record.rating, epochs)
+            else:
+                writer.add_scalar(f"Rating/{method_name.lower()}_rating", record.elo, epochs)
         writer.flush()
     
     # 打印排行榜

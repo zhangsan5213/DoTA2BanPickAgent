@@ -38,8 +38,8 @@ rating:
 # Training defaults (used in __main__)
 training:
   epochs: 128
-  batch_size: 64  # each batch, all samples are used for rollouts (no wasted computation)
-  samples_per_epoch: 1024
+  batch_size: 512  # each batch, all samples are used for rollouts (no wasted computation)
+  samples_per_epoch: 8192
   use_tensorboard: true
   historical_opponent_prob: 0.6  # 60% of rollouts use historical vs current; 40% self-play
   checkpoint_dirs:

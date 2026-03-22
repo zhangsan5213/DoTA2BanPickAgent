@@ -1,0 +1,159 @@
+"""Evaluation management."""
+
+import os
+from typing import Dict, Any, Optional
+import torch
+
+from eval import EvalMethod, get_evaluator, RatingEvaluatorBase
+from model.win_rate_oracle import WinRateOracle
+
+
+class EvaluatorManager:
+    """Manages model evaluation during training."""
+    
+    def __init__(self, config, oracle: WinRateOracle, save_dir: str):
+        """
+        Args:
+            config: TrainingConfig instance
+            oracle: Win rate oracle model
+            save_dir: Directory to save checkpoints
+        """
+        self.config = config
+        self.oracle = oracle
+        self.save_dir = save_dir
+        self.writer = None
+        
+        # Determine evaluation method
+        if config.rating_method.lower() == "elo":
+            self.eval_method = EvalMethod.ELO
+            self.method_name = "ELO"
+        elif config.rating_method.lower() == "trueskill":
+            self.eval_method = EvalMethod.TRUESKILL
+            self.method_name = "TrueSkill"
+        else:
+            raise ValueError(f"Unknown rating method: {config.rating_method}")
+        
+        # Build eval kwargs
+        self.eval_kwargs = {
+            "save_dir": save_dir,
+            "oracle": oracle,
+            "num_opponents": config.rating_num_opponents,
+            "num_player_sets": config.rating_num_player_sets,
+        }
+        
+        if config.rating_method.lower() == "elo":
+            self.eval_kwargs.update({
+                "k_factor": config.elo_k_factor,
+                "opponent_sample_std": config.elo_opponent_sample_std,
+            })
+        elif config.rating_method.lower() == "trueskill":
+            self.eval_kwargs.update({
+                "staleness_threshold": config.ts_staleness_threshold,
+                "num_active_models": config.ts_num_active_models,
+            })
+        
+        self.rating_evaluator: RatingEvaluatorBase = get_evaluator(
+            self.eval_method, **self.eval_kwargs
+        )
+    
+    def set_writer(self, writer):
+        """Set TensorBoard writer."""
+        self.writer = writer
+    
+    def should_evaluate(self, epoch: int) -> bool:
+        """Check if evaluation should be performed at this epoch."""
+        return (epoch + 1) % self.config.eval_interval == 0
+    
+    def evaluate(self, model_path: str, epoch: int) -> Dict[str, Any]:
+        """Evaluate model at given epoch.
+        
+        Args:
+            model_path: Path to model checkpoint
+            epoch: Current epoch number
+            
+        Returns:
+            Evaluation results
+        """
+        print(f"\n[+] {self.method_name} evaluation at epoch {epoch}...")
+        
+        eval_result = self.rating_evaluator.evaluate(
+            model_path=model_path,
+            num_opponents=self.config.rating_num_opponents,
+            num_player_sets=self.config.rating_num_player_sets
+        )
+        
+        # Print leaderboard
+        self.rating_evaluator.print_leaderboard()
+        
+        # Log to TensorBoard
+        if self.writer is not None:
+            self._log_ratings(model_path, eval_result, epoch)
+        
+        return eval_result
+    
+    def _log_ratings(self, model_path: str, eval_result: Dict, epoch: int):
+        """Log rating metrics to TensorBoard."""
+        record = self.rating_evaluator.rating_manager.get_record(model_path)
+        if record is None:
+            return
+        
+        if self.config.rating_method.lower() == "trueskill":
+            self.writer.add_scalar(f"Rating/{self.method_name.lower()}_mu", record.mu, epoch)
+            self.writer.add_scalar(f"Rating/{self.method_name.lower()}_sigma", record.sigma, epoch)
+            self.writer.add_scalar(f"Rating/{self.method_name.lower()}_rating", record.rating, epoch)
+        else:
+            self.writer.add_scalar(f"Rating/{self.method_name.lower()}_rating", record.elo, epoch)
+        
+        # Log average win rate
+        if eval_result.get('results'):
+            avg_winrate = sum(r['win_rate'] for r in eval_result['results']) / len(eval_result['results'])
+            self.writer.add_scalar("Rating/avg_winrate", avg_winrate, epoch)
+        
+        self.writer.flush()
+    
+    def final_evaluation(self, model_path: str, total_epochs: int):
+        """Perform final evaluation after training.
+        
+        Args:
+            model_path: Path to final model checkpoint
+            total_epochs: Total number of training epochs
+        """
+        print(f"[+] Final {self.method_name} evaluation...")
+        
+        self.rating_evaluator.evaluate(
+            model_path=model_path,
+            num_opponents=self.config.rating_num_opponents,
+            num_player_sets=self.config.rating_num_player_sets
+        )
+        
+        # Log final ratings
+        if self.writer is not None:
+            record = self.rating_evaluator.rating_manager.get_record(model_path)
+            if record is not None:
+                if self.config.rating_method.lower() == "trueskill":
+                    self.writer.add_scalar(f"Rating/{self.method_name.lower()}_mu", record.mu, total_epochs)
+                    self.writer.add_scalar(f"Rating/{self.method_name.lower()}_sigma", record.sigma, total_epochs)
+                    self.writer.add_scalar(f"Rating/{self.method_name.lower()}_rating", record.rating, total_epochs)
+                else:
+                    self.writer.add_scalar(f"Rating/{self.method_name.lower()}_rating", record.elo, total_epochs)
+            self.writer.flush()
+        
+        # Print final leaderboard
+        self.rating_evaluator.print_leaderboard()
+
+
+def save_checkpoint(agent, save_dir: str, epoch: int) -> str:
+    """Save model checkpoint.
+    
+    Args:
+        agent: Agent model
+        save_dir: Directory to save checkpoint
+        epoch: Current epoch number
+        
+    Returns:
+        Path to saved checkpoint
+    """
+    checkpoint_path = f"{save_dir}/bp_agent_epoch{epoch}.pth"
+    torch.save(agent.state_dict(), checkpoint_path)
+    print(f"[+] Checkpoint saved: {checkpoint_path}")
+    return checkpoint_path

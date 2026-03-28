@@ -77,8 +77,7 @@ class EpochRunner:
                 batch_samples=batch_samples,
                 checkpoints=checkpoints,
                 checkpoint_manager=self.checkpoint_manager,
-                batch_idx=batch_idx,
-                global_step=self.global_step
+                batch_idx=batch_idx
             )
             
             # Process each rollout

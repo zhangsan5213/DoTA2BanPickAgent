@@ -31,7 +31,7 @@ from eval.rating_base import (
     ModelRatingRecord,
     RatingManagerBase,
     BattleSimulatorBase,
-    RatingEvaluatorBase
+    RatingEvaluatorBase,
 )
 
 
@@ -49,7 +49,7 @@ TS_ENV = trueskill.TrueSkill(
     sigma=INITIAL_SIGMA,
     beta=BETA,
     tau=TAU,
-    draw_probability=DRAW_PROBABILITY
+    draw_probability=DRAW_PROBABILITY,
 )
 
 # 对手选择参数
@@ -63,6 +63,7 @@ NUM_PLAYER_SETS = 16
 @dataclass
 class ModelTrueSkillRecord(ModelRatingRecord):
     """模型 TrueSkill 记录"""
+
     mu: float = INITIAL_MU
     sigma: float = INITIAL_SIGMA
     staleness: int = 0
@@ -82,29 +83,29 @@ class ModelTrueSkillRecord(ModelRatingRecord):
 
     def to_dict(self) -> dict:
         return {
-            'model_path': self.model_path,
-            'mu': self.mu,
-            'sigma': self.sigma,
-            'staleness': self.staleness,
-            'wins': self.wins,
-            'losses': self.losses,
-            'draws': self.draws,
-            'total_games': self.total_games,
-            'last_eval_time': self.last_eval_time,
+            "model_path": self.model_path,
+            "mu": self.mu,
+            "sigma": self.sigma,
+            "staleness": self.staleness,
+            "wins": self.wins,
+            "losses": self.losses,
+            "draws": self.draws,
+            "total_games": self.total_games,
+            "last_eval_time": self.last_eval_time,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ModelTrueSkillRecord":
         return cls(
-            model_path=data['model_path'],
-            mu=data.get('mu', INITIAL_MU),
-            sigma=data.get('sigma', INITIAL_SIGMA),
-            staleness=data.get('staleness', 0),
-            wins=data.get('wins', 0),
-            losses=data.get('losses', 0),
-            draws=data.get('draws', 0),
-            total_games=data.get('total_games', 0),
-            last_eval_time=data.get('last_eval_time', ''),
+            model_path=data["model_path"],
+            mu=data.get("mu", INITIAL_MU),
+            sigma=data.get("sigma", INITIAL_SIGMA),
+            staleness=data.get("staleness", 0),
+            wins=data.get("wins", 0),
+            losses=data.get("losses", 0),
+            draws=data.get("draws", 0),
+            total_games=data.get("total_games", 0),
+            last_eval_time=data.get("last_eval_time", ""),
         )
 
 
@@ -122,15 +123,15 @@ class TrueSkillRatingManager(RatingManagerBase):
 
     def _create_record(self, model_path: str, **kwargs) -> ModelTrueSkillRecord:
         """创建新的评分记录"""
-        mu = kwargs.get('mu', INITIAL_MU)
-        sigma = kwargs.get('sigma', INITIAL_SIGMA)
-        staleness = kwargs.get('staleness', 0)
+        mu = kwargs.get("mu", INITIAL_MU)
+        sigma = kwargs.get("sigma", INITIAL_SIGMA)
+        staleness = kwargs.get("staleness", 0)
         return ModelTrueSkillRecord(
             model_path=model_path,
             mu=mu,
             sigma=sigma,
             staleness=staleness,
-            last_eval_time=datetime.now().strftime("%Y%m%d%H%M%S")
+            last_eval_time=datetime.now().strftime("%Y%m%d%H%M%S"),
         )
 
     def _record_from_dict(self, data: dict) -> ModelTrueSkillRecord:
@@ -178,7 +179,8 @@ class TrueSkillRatingManager(RatingManagerBase):
         num_models = num_models or self.NUM_ACTIVE_MODELS
 
         existing_models = [
-            (path, record) for path, record in self.records.items()
+            (path, record)
+            for path, record in self.records.items()
             if os.path.exists(path)
         ]
 
@@ -203,12 +205,7 @@ class TrueSkillRatingManager(RatingManagerBase):
         existing_models.sort(key=calc_activity, reverse=True)
         return [path for path, _ in existing_models[:num_models]]
 
-    def update_rating(
-        self,
-        model_a_path: str,
-        model_b_path: str,
-        score_a: float
-    ):
+    def update_rating(self, model_a_path: str, model_b_path: str, score_a: float):
         """
         更新两个模型的 TrueSkill 评分（单场对战）
 
@@ -235,19 +232,18 @@ class TrueSkillRatingManager(RatingManagerBase):
         # TrueSkill 的 ranks: 0 表示赢，数字越大越弱
         if score_a > 0.5 + 1e-8:
             # A 赢: ranks = [0, 1]
-            (new_rating_a,), (new_rating_b,) = TS_ENV.rate_1vs1(rating_a, rating_b)
+            new_rating_a, new_rating_b = TS_ENV.rate_1vs1(rating_a, rating_b)
             record_a.wins += 1
             record_b.losses += 1
         elif score_a < 0.5 - 1e-8:
             # B 赢: ranks = [1, 0]，通过交换顺序实现
-            (new_rating_b,), (new_rating_a,) = TS_ENV.rate_1vs1(rating_b, rating_a)
+            new_rating_b, new_rating_a = TS_ENV.rate_1vs1(rating_b, rating_a)
             record_a.losses += 1
             record_b.wins += 1
         else:
             # 平局
             (new_rating_a,), (new_rating_b,) = TS_ENV.rate(
-                [(rating_a,), (rating_b,)],
-                ranks=[0, 0]
+                [(rating_a,), (rating_b,)], ranks=[0, 0]
             )
             record_a.draws += 1
             record_b.draws += 1
@@ -275,7 +271,7 @@ class TrueSkillRatingManager(RatingManagerBase):
         model_b_path: str,
         a_win_count: int,
         b_win_count: int,
-        draw_count: int = 0
+        draw_count: int = 0,
     ):
         """
         批量更新两个模型的评分（多场对战聚合）
@@ -327,9 +323,7 @@ class TrueSkillRatingManager(RatingManagerBase):
         return record.mu
 
     def select_opponents(
-        self,
-        current_model_path: str,
-        num_opponents: int = NUM_OPPONENTS_TO_SAMPLE
+        self, current_model_path: str, num_opponents: int = NUM_OPPONENTS_TO_SAMPLE
     ) -> List[str]:
         """
         根据当前模型 TrueSkill，使用正态分布采样选择对手
@@ -340,7 +334,8 @@ class TrueSkillRatingManager(RatingManagerBase):
         current_mu = self.records[current_model_path].mu
 
         other_models = [
-            path for path in self.records.keys()
+            path
+            for path in self.records.keys()
             if path != current_model_path and os.path.exists(path)
         ]
 
@@ -360,18 +355,15 @@ class TrueSkillRatingManager(RatingManagerBase):
         weights = weights / weights.sum()
 
         selected_indices = np.random.choice(
-            len(other_models),
-            size=num_opponents,
-            replace=False,
-            p=weights
+            len(other_models), size=num_opponents, replace=False, p=weights
         )
 
         return [other_models[i] for i in selected_indices]
 
     def refresh_stale_models(
         self,
-        battle_simulator: 'BPBattleSimulator',
-        num_player_sets: int = NUM_PLAYER_SETS
+        battle_simulator: "BPBattleSimulator",
+        num_player_sets: int = NUM_PLAYER_SETS,
     ) -> Dict:
         """
         刷新陈旧的模型
@@ -381,21 +373,27 @@ class TrueSkillRatingManager(RatingManagerBase):
         """
         stale_models = self.get_stale_models()
         if len(stale_models) == 0:
-            return {'refreshed': [], 'results': []}
+            return {"refreshed": [], "results": []}
 
         active_models = self.get_most_active_models(self.NUM_ACTIVE_MODELS)
         if len(active_models) == 0:
-            return {'refreshed': [], 'results': []}
+            return {"refreshed": [], "results": []}
 
-        print(f"\n[TrueSkill Staleness] Found {len(stale_models)} stale models, refreshing...")
-        print(f"[TrueSkill Staleness] Active models: {[os.path.basename(p) for p in active_models]}")
+        print(
+            f"\n[TrueSkill Staleness] Found {len(stale_models)} stale models, refreshing..."
+        )
+        print(
+            f"[TrueSkill Staleness] Active models: {[os.path.basename(p) for p in active_models]}"
+        )
 
         refresh_results = []
 
         for stale_model in stale_models:
             stale_record = self.records[stale_model]
-            print(f"\n  Refreshing {os.path.basename(stale_model)} "
-                  f"(staleness={stale_record.staleness}, μ={stale_record.mu:.2f})")
+            print(
+                f"\n  Refreshing {os.path.basename(stale_model)} "
+                f"(staleness={stale_record.staleness}, μ={stale_record.mu:.2f})"
+            )
 
             model_results = []
             total_mu_change = 0
@@ -405,59 +403,69 @@ class TrueSkillRatingManager(RatingManagerBase):
                     continue
 
                 active_record = self.records[active_model]
-                print(f"    vs {os.path.basename(active_model)} "
-                      f"(μ={active_record.mu:.2f}, games={active_record.total_games})")
+                print(
+                    f"    vs {os.path.basename(active_model)} "
+                    f"(μ={active_record.mu:.2f}, games={active_record.total_games})"
+                )
 
                 win_rate, battle_details = battle_simulator.evaluate_models(
                     stale_model, active_model, num_player_sets
                 )
 
-                a_win_count = battle_details.count('win')
-                b_win_count = battle_details.count('loss')
-                draw_count = battle_details.count('draw')
+                a_win_count = battle_details.count("win")
+                b_win_count = battle_details.count("loss")
+                draw_count = battle_details.count("draw")
 
                 mu_before = self.records[stale_model].mu
 
                 self.update_rating_batch(
-                    stale_model, active_model,
-                    a_win_count, b_win_count, draw_count
+                    stale_model, active_model, a_win_count, b_win_count, draw_count
                 )
 
                 mu_after = self.records[stale_model].mu
                 mu_change = mu_after - mu_before
 
-                print(f"      Win rate: {win_rate*100:.1f}%, "
-                      f"μ change: {mu_change:+.2f}")
+                print(
+                    f"      Win rate: {win_rate * 100:.1f}%, μ change: {mu_change:+.2f}"
+                )
 
-                model_results.append({
-                    'active_model': active_model,
-                    'active_mu': active_record.mu,
-                    'win_rate': win_rate,
-                    'mu_change': mu_change
-                })
+                model_results.append(
+                    {
+                        "active_model": active_model,
+                        "active_mu": active_record.mu,
+                        "win_rate": win_rate,
+                        "mu_change": mu_change,
+                    }
+                )
 
                 total_mu_change += mu_change
 
             self.reset_staleness(stale_model)
 
             refreshed_record = self.records[stale_model]
-            print(f"    Refreshed: μ={stale_record.mu:.2f} -> {refreshed_record.mu:.2f} "
-                  f"({total_mu_change:+.2f}), staleness reset to 0")
+            print(
+                f"    Refreshed: μ={stale_record.mu:.2f} -> {refreshed_record.mu:.2f} "
+                f"({total_mu_change:+.2f}), staleness reset to 0"
+            )
 
-            refresh_results.append({
-                'stale_model': stale_model,
-                'stale_mu_before': stale_record.mu - total_mu_change,
-                'stale_mu_after': refreshed_record.mu,
-                'total_mu_change': total_mu_change,
-                'battles': model_results
-            })
+            refresh_results.append(
+                {
+                    "stale_model": stale_model,
+                    "stale_mu_before": stale_record.mu - total_mu_change,
+                    "stale_mu_after": refreshed_record.mu,
+                    "total_mu_change": total_mu_change,
+                    "battles": model_results,
+                }
+            )
 
-        print(f"[TrueSkill Staleness] Refresh complete. {len(stale_models)} models updated.")
+        print(
+            f"[TrueSkill Staleness] Refresh complete. {len(stale_models)} models updated."
+        )
 
         return {
-            'refreshed': stale_models,
-            'active_models_used': active_models,
-            'results': refresh_results
+            "refreshed": stale_models,
+            "active_models_used": active_models,
+            "results": refresh_results,
         }
 
 
@@ -465,9 +473,7 @@ class BPBattleSimulator(BattleSimulatorBase):
     """BP 对战模拟器"""
 
     def __init__(
-        self,
-        oracle: Optional[WinRateOracle] = None,
-        oracle_path: Optional[str] = None
+        self, oracle: Optional[WinRateOracle] = None, oracle_path: Optional[str] = None
     ):
         if oracle is not None:
             self.oracle = oracle
@@ -479,11 +485,7 @@ class BPBattleSimulator(BattleSimulatorBase):
             oracle_path = "./ckpts/win_rate_oracle-num_heroes_160-text-embd_dim_128-player_attention/win_rate_oracle-20260309033516-000-0.9042.pth"
 
         oracle = WinRateOracle(
-            embed_dim=128,
-            nhead=8,
-            num_layers=6,
-            use_text=True,
-            use_player_heroes=True
+            embed_dim=128, nhead=8, num_layers=6, use_text=True, use_player_heroes=True
         ).to(DEVICE)
 
         if os.path.exists(oracle_path):
@@ -496,7 +498,7 @@ class BPBattleSimulator(BattleSimulatorBase):
         return oracle
 
     def load_agent(self, model_path: str) -> BPTransformerAgent:
-        agent = BPTransformerAgent(embed_dim=128, nhead=8, num_layers=4).to(DEVICE)
+        agent = BPTransformerAgent(embed_dim=256, nhead=8, num_layers=4).to(DEVICE)
         agent.load_state_dict(torch.load(model_path, map_location=DEVICE))
         agent.eval()
         return agent
@@ -506,12 +508,21 @@ class BPBattleSimulator(BattleSimulatorBase):
         agent_radiant: BPTransformerAgent,
         agent_dire: BPTransformerAgent,
         player_set: Dict,
-        max_steps: int = 24
+        max_steps: int = 24,
     ) -> Tuple[List[int], List[int], float]:
-        r_players = player_set['r_players']
-        d_players = player_set['d_players']
+        r_players = player_set["r_players"]
+        d_players = player_set["d_players"]
 
-        state = BPState([], [], r_players, d_players, radiant_bans=[], dire_bans=[], is_radiant_turn=True, step_idx=0)
+        state = BPState(
+            [],
+            [],
+            r_players,
+            d_players,
+            radiant_bans=[],
+            dire_bans=[],
+            is_radiant_turn=True,
+            step_idx=0,
+        )
 
         step = 0
         while not state.done and step < max_steps:
@@ -548,7 +559,7 @@ class BPBattleSimulator(BattleSimulatorBase):
         self,
         model_a_path: str,
         model_b_path: str,
-        num_player_sets: int = NUM_PLAYER_SETS
+        num_player_sets: int = NUM_PLAYER_SETS,
     ) -> Tuple[float, List[str]]:
         """
         评估两个模型的对战结果
@@ -604,19 +615,20 @@ class BPBattleSimulator(BattleSimulatorBase):
                 num_players=10,
                 position_distribution={1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, 5: 0.2},
                 m=3,
-                n=5
+                n=5,
             )
 
             from utils.raw_data import get_valid_hero_ids
+
             valid_hero_ids = get_valid_hero_ids()
 
             def build_player_features(players):
                 features = []
                 for p in players:
                     vector = [0.0] * NUM_HEROES
-                    for hero_info in p['heroes']:
-                        hero_id = hero_info['id']
-                        win_rate = hero_info['win_rate']
+                    for hero_info in p["heroes"]:
+                        hero_id = hero_info["id"]
+                        win_rate = hero_info["win_rate"]
                         if hero_id in valid_hero_ids and hero_id <= NUM_HEROES:
                             vector[hero_id - 1] = win_rate
                     features.append(vector)
@@ -625,10 +637,7 @@ class BPBattleSimulator(BattleSimulatorBase):
             r_players = build_player_features(all_players[:5])
             d_players = build_player_features(all_players[5:])
 
-            player_sets.append({
-                'r_players': r_players,
-                'd_players': d_players
-            })
+            player_sets.append({"r_players": r_players, "d_players": d_players})
 
         return player_sets
 
@@ -638,7 +647,7 @@ def evaluate_and_update_trueskill(
     rating_manager: Optional[TrueSkillRatingManager] = None,
     battle_simulator: Optional[BPBattleSimulator] = None,
     num_opponents: int = NUM_OPPONENTS_TO_SAMPLE,
-    num_player_sets: int = NUM_PLAYER_SETS
+    num_player_sets: int = NUM_PLAYER_SETS,
 ) -> Dict:
     """
     评估模型并更新 TrueSkill 评分（严谨版本：逐场更新）
@@ -653,25 +662,27 @@ def evaluate_and_update_trueskill(
     current_mu_before = current_record.mu
     current_sigma_before = current_record.sigma
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"TrueSkill Evaluation: {model_path}")
-    print(f"Current: μ={current_mu_before:.2f}, σ={current_sigma_before:.2f}, Rating={current_rating_before:.2f}")
-    print(f"{'='*60}")
+    print(
+        f"Current: μ={current_mu_before:.2f}, σ={current_sigma_before:.2f}, Rating={current_rating_before:.2f}"
+    )
+    print(f"{'=' * 60}")
 
     opponents = rating_manager.select_opponents(model_path, num_opponents)
 
     if len(opponents) == 0:
         print("[TrueSkill] No opponents found, skipping evaluation")
         return {
-            'model_path': model_path,
-            'mu_before': current_mu_before,
-            'sigma_before': current_sigma_before,
-            'rating_before': current_rating_before,
-            'mu_after': current_mu_before,
-            'sigma_after': current_sigma_before,
-            'rating_after': current_rating_before,
-            'opponents': [],
-            'results': []
+            "model_path": model_path,
+            "mu_before": current_mu_before,
+            "sigma_before": current_sigma_before,
+            "rating_before": current_rating_before,
+            "mu_after": current_mu_before,
+            "sigma_after": current_sigma_before,
+            "rating_after": current_rating_before,
+            "opponents": [],
+            "results": [],
         }
 
     print(f"[TrueSkill] Selected {len(opponents)} opponents by TrueSkill distribution")
@@ -683,43 +694,52 @@ def evaluate_and_update_trueskill(
         opponent_record = rating_manager.get_record(opponent_path)
         opponent_mu = opponent_record.mu if opponent_record else INITIAL_MU
         opponent_sigma = opponent_record.sigma if opponent_record else INITIAL_SIGMA
-        opponent_rating = opponent_record.rating if opponent_record else (INITIAL_MU - 3 * INITIAL_SIGMA)
+        opponent_rating = (
+            opponent_record.rating
+            if opponent_record
+            else (INITIAL_MU - 3 * INITIAL_SIGMA)
+        )
 
-        print(f"\n  vs {os.path.basename(opponent_path)} (μ={opponent_mu:.2f}, σ={opponent_sigma:.2f})")
+        print(
+            f"\n  vs {os.path.basename(opponent_path)} (μ={opponent_mu:.2f}, σ={opponent_sigma:.2f})"
+        )
 
         win_rate, battle_results = battle_simulator.evaluate_models(
             model_path, opponent_path, num_player_sets
         )
 
-        a_win_count = battle_results.count('win')
-        b_win_count = battle_results.count('loss')
-        draw_count = battle_results.count('draw')
+        a_win_count = battle_results.count("win")
+        b_win_count = battle_results.count("loss")
+        draw_count = battle_results.count("draw")
 
         mu_before = rating_manager.get_record(model_path).mu
 
         rating_manager.update_rating_batch(
-            model_path, opponent_path,
-            a_win_count, b_win_count, draw_count
+            model_path, opponent_path, a_win_count, b_win_count, draw_count
         )
 
         mu_after = rating_manager.get_record(model_path).mu
         mu_change = mu_after - mu_before
 
-        print(f"    Battles: {a_win_count}W/{b_win_count}L/{draw_count}D, "
-              f"Win rate: {win_rate*100:.1f}%, μ change: {mu_change:+.2f}")
+        print(
+            f"    Battles: {a_win_count}W/{b_win_count}L/{draw_count}D, "
+            f"Win rate: {win_rate * 100:.1f}%, μ change: {mu_change:+.2f}"
+        )
 
-        results.append({
-            'opponent_path': opponent_path,
-            'opponent_mu': opponent_mu,
-            'opponent_sigma': opponent_sigma,
-            'opponent_rating': opponent_rating,
-            'win_rate': win_rate,
-            'a_win_count': a_win_count,
-            'b_win_count': b_win_count,
-            'draw_count': draw_count,
-            'mu_change': mu_change,
-            'battle_results': battle_results
-        })
+        results.append(
+            {
+                "opponent_path": opponent_path,
+                "opponent_mu": opponent_mu,
+                "opponent_sigma": opponent_sigma,
+                "opponent_rating": opponent_rating,
+                "win_rate": win_rate,
+                "a_win_count": a_win_count,
+                "b_win_count": b_win_count,
+                "draw_count": draw_count,
+                "mu_change": mu_change,
+                "battle_results": battle_results,
+            }
+        )
 
         total_mu_change += mu_change
 
@@ -728,24 +748,30 @@ def evaluate_and_update_trueskill(
     current_sigma_after = current_record.sigma
     current_rating_after = current_record.rating
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"TrueSkill Evaluation Complete")
-    print(f"μ: {current_mu_before:.2f} -> {current_mu_after:.2f} ({total_mu_change:+.2f})")
-    print(f"σ: {current_sigma_before:.2f} -> {current_sigma_after:.2f} ({current_sigma_after - current_sigma_before:+.2f})")
+    print(
+        f"μ: {current_mu_before:.2f} -> {current_mu_after:.2f} ({total_mu_change:+.2f})"
+    )
+    print(
+        f"σ: {current_sigma_before:.2f} -> {current_sigma_after:.2f} ({current_sigma_after - current_sigma_before:+.2f})"
+    )
     print(f"Rating: {current_rating_before:.2f} -> {current_rating_after:.2f}")
-    print(f"Record: {current_record.wins}W/{current_record.losses}L/{current_record.draws}D")
-    print(f"{'='*60}\n")
+    print(
+        f"Record: {current_record.wins}W/{current_record.losses}L/{current_record.draws}D"
+    )
+    print(f"{'=' * 60}\n")
 
     return {
-        'model_path': model_path,
-        'mu_before': current_mu_before,
-        'sigma_before': current_sigma_before,
-        'rating_before': current_rating_before,
-        'mu_after': current_mu_after,
-        'sigma_after': current_sigma_after,
-        'rating_after': current_rating_after,
-        'opponents': opponents,
-        'results': results
+        "model_path": model_path,
+        "mu_before": current_mu_before,
+        "sigma_before": current_sigma_before,
+        "rating_before": current_rating_before,
+        "mu_after": current_mu_after,
+        "sigma_after": current_sigma_after,
+        "rating_after": current_rating_after,
+        "opponents": opponents,
+        "results": results,
     }
 
 
@@ -762,12 +788,16 @@ def print_trueskill_leaderboard(save_dir: str = "./ckpts/bp_agent"):
 
     stale_count = len(rating_manager.get_stale_models())
 
-    print(f"\n{'='*90}")
-    print(f"TrueSkill Leaderboard (Staleness Threshold: {rating_manager.STALENESS_THRESHOLD}, "
-          f"Stale Models: {stale_count})")
-    print(f"{'='*90}")
-    print(f"{'Rank':<6}{'Model':<40}{'μ':<9}{'σ':<9}{'Rating':<9}{'W/L/D':<12}{'Stale':<6}")
-    print(f"{'-'*90}")
+    print(f"\n{'=' * 90}")
+    print(
+        f"TrueSkill Leaderboard (Staleness Threshold: {rating_manager.STALENESS_THRESHOLD}, "
+        f"Stale Models: {stale_count})"
+    )
+    print(f"{'=' * 90}")
+    print(
+        f"{'Rank':<6}{'Model':<40}{'μ':<9}{'σ':<9}{'Rating':<9}{'W/L/D':<12}{'Stale':<6}"
+    )
+    print(f"{'-' * 90}")
 
     for rank, (path, rating) in enumerate(models, 1):
         record = rating_manager.get_record(path)
@@ -786,10 +816,14 @@ def print_trueskill_leaderboard(save_dir: str = "./ckpts/bp_agent"):
             rating_str = "-"
             stale_str = "-"
         model_name = os.path.basename(path)[:38]
-        print(f"{rank:<6}{model_name:<40}{mu_str:<9}{sigma_str:<9}{rating_str:<9}{wl:<12}{stale_str:<6}")
+        print(
+            f"{rank:<6}{model_name:<40}{mu_str:<9}{sigma_str:<9}{rating_str:<9}{wl:<12}{stale_str:<6}"
+        )
 
-    print(f"{'='*90}")
-    print(f"* = Staleness >= threshold ({rating_manager.STALENESS_THRESHOLD}), will be refreshed before next eval")
+    print(f"{'=' * 90}")
+    print(
+        f"* = Staleness >= threshold ({rating_manager.STALENESS_THRESHOLD}), will be refreshed before next eval"
+    )
     print(f"\n")
 
 
@@ -817,7 +851,9 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
         super().__init__(save_dir, num_opponents, num_player_sets)
 
         self.rating_manager = TrueSkillRatingManager(save_dir=save_dir)
-        self.battle_simulator = BPBattleSimulator(oracle=oracle, oracle_path=oracle_path)
+        self.battle_simulator = BPBattleSimulator(
+            oracle=oracle, oracle_path=oracle_path
+        )
 
         self.rating_manager.STALENESS_THRESHOLD = staleness_threshold
         self.rating_manager.NUM_ACTIVE_MODELS = num_active_models
@@ -827,12 +863,12 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
         model_path: str,
         num_opponents: Optional[int] = None,
         num_player_sets: Optional[int] = None,
-        skip_staleness_refresh: bool = False
+        skip_staleness_refresh: bool = False,
     ) -> Dict:
         num_opponents = num_opponents or self.num_opponents
         num_player_sets = num_player_sets or self.num_player_sets
 
-        refresh_result = {'refreshed': [], 'results': []}
+        refresh_result = {"refreshed": [], "results": []}
         if not skip_staleness_refresh:
             refresh_result = self.rating_manager.refresh_stale_models(
                 self.battle_simulator, num_player_sets
@@ -845,10 +881,10 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
             rating_manager=self.rating_manager,
             battle_simulator=self.battle_simulator,
             num_opponents=num_opponents,
-            num_player_sets=num_player_sets
+            num_player_sets=num_player_sets,
         )
 
-        eval_result['staleness_refresh'] = refresh_result
+        eval_result["staleness_refresh"] = refresh_result
 
         return eval_result
 
@@ -874,10 +910,7 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
         print_trueskill_leaderboard(save_dir=self.save_dir)
 
     def register_model(
-        self,
-        model_path: str,
-        mu: float = INITIAL_MU,
-        sigma: float = INITIAL_SIGMA
+        self, model_path: str, mu: float = INITIAL_MU, sigma: float = INITIAL_SIGMA
     ) -> ModelTrueSkillRecord:
         return self.rating_manager.register_model(model_path, mu=mu, sigma=sigma)
 
@@ -899,20 +932,26 @@ if __name__ == "__main__":
     for i, model in enumerate(test_models):
         mu = 25.0 + (i - 1) * 5
         record = manager.register_model(model, mu=mu, sigma=INITIAL_SIGMA)
-        print(f"Registered {model}: μ={record.mu:.2f}, σ={record.sigma:.2f}, Rating={record.rating:.2f}")
+        print(
+            f"Registered {model}: μ={record.mu:.2f}, σ={record.sigma:.2f}, Rating={record.rating:.2f}"
+        )
 
     print("\n--- Testing Rating Update (single battle) ---")
     print("Simulating: model_2 beats model_1")
 
     record_before_a = manager.get_record(test_models[1])
     record_before_b = manager.get_record(test_models[0])
-    print(f"Before: model_2 μ={record_before_a.mu:.2f}, model_1 μ={record_before_b.mu:.2f}")
+    print(
+        f"Before: model_2 μ={record_before_a.mu:.2f}, model_1 μ={record_before_b.mu:.2f}"
+    )
 
     manager.update_rating(test_models[1], test_models[0], 1.0)
 
     record_after_a = manager.get_record(test_models[1])
     record_after_b = manager.get_record(test_models[0])
-    print(f"After:  model_2 μ={record_after_a.mu:.2f}, model_1 μ={record_after_b.mu:.2f}")
+    print(
+        f"After:  model_2 μ={record_after_a.mu:.2f}, model_1 μ={record_after_b.mu:.2f}"
+    )
 
     print("\n--- Testing Batch Update (16 battles: 9W-7L) ---")
     print("Simulating: model_2 vs model_1, 9 wins, 7 losses")
@@ -921,7 +960,9 @@ if __name__ == "__main__":
     mu_change = manager.update_rating_batch(test_models[1], test_models[0], 9, 7, 0)
     mu_after = manager.get_record(test_models[1]).mu
 
-    print(f"Before: μ={mu_before:.2f}, After: μ={mu_after:.2f}, Change: {mu_change:+.2f}")
+    print(
+        f"Before: μ={mu_before:.2f}, After: μ={mu_after:.2f}, Change: {mu_change:+.2f}"
+    )
 
     print("\n--- Testing Opponent Selection ---")
     current_model = test_models[1]
@@ -935,7 +976,10 @@ if __name__ == "__main__":
 
     print("\n--- Testing TrueSkillEvaluator Interface ---")
     from eval import EvalMethod, get_evaluator
-    evaluator = get_evaluator(EvalMethod.TRUESKILL, save_dir="./ckpts/bp_agent_test_trueskill")
+
+    evaluator = get_evaluator(
+        EvalMethod.TRUESKILL, save_dir="./ckpts/bp_agent_test_trueskill"
+    )
     print(f"Created evaluator: {type(evaluator).__name__}")
     print(f"Available models: {len(evaluator.list_models())}")
 

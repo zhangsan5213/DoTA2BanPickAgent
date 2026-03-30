@@ -1,6 +1,6 @@
 """Loss computation for PPO training."""
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import torch
 import torch.nn.functional as F
 from functools import lru_cache
@@ -10,7 +10,9 @@ from utils.raw_data import NUM_HEROES, get_valid_hero_ids
 from utils.device import DEVICE
 
 
-def compute_entropy(logits: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def compute_entropy(
+    logits: torch.Tensor, mask: Optional[torch.Tensor] = None
+) -> torch.Tensor:
     """Compute policy entropy.
 
     Args:
@@ -28,7 +30,9 @@ def compute_entropy(logits: torch.Tensor, mask: torch.Tensor = None) -> torch.Te
     return entropy
 
 
-def compute_kl_divergence(new_log_probs: torch.Tensor, old_log_probs: torch.Tensor) -> float:
+def compute_kl_divergence(
+    new_log_probs: torch.Tensor, old_log_probs: torch.Tensor
+) -> float:
     """Compute KL divergence (true KL from old to new).
 
     KL(old || new) = sum_{a} old_policy(a) * (log old_policy(a) - log new_policy(a))
@@ -49,8 +53,13 @@ def compute_kl_divergence(new_log_probs: torch.Tensor, old_log_probs: torch.Tens
 class LossComputer:
     """Computes PPO losses for a rollout."""
 
-    def __init__(self, agent, value_loss_coeff: float = 2.0,
-                 entropy_loss_coeff: float = 0.03, clip_eps: float = 0.2):
+    def __init__(
+        self,
+        agent,
+        value_loss_coeff: float = 2.0,
+        entropy_loss_coeff: float = 0.03,
+        clip_eps: float = 0.2,
+    ):
         """
         Args:
             agent: The agent model
@@ -84,11 +93,11 @@ class LossComputer:
         Returns:
             Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div)
         """
-        valid_mask = rollout['valid_mask'].to(DEVICE)
-        actions = rollout['actions'].to(DEVICE)
-        old_log_probs = rollout['log_probs'].to(DEVICE)
-        values = rollout['values'].to(DEVICE)
-        rewards = rollout['rewards'].to(DEVICE)
+        valid_mask = rollout["valid_mask"].to(DEVICE)
+        actions = rollout["actions"].to(DEVICE)
+        old_log_probs = rollout["log_probs"].to(DEVICE)
+        values = rollout["values"].to(DEVICE)
+        rewards = rollout["rewards"].to(DEVICE)
 
         actions = actions[valid_mask]
         old_log_probs = old_log_probs[valid_mask]
@@ -100,7 +109,7 @@ class LossComputer:
             rewards.unsqueeze(-1),
             values.unsqueeze(-1),
             dones.unsqueeze(-1),
-            normalize_returns=True
+            normalize_returns=True,
         )
         advantages = advantages.squeeze(-1)
         returns = returns.squeeze(-1)
@@ -110,7 +119,7 @@ class LossComputer:
 
         # Compute all policy outputs in a single pass (no duplicate forward passes)
         new_log_probs, new_values, entropies = self._compute_policy_outputs_single_pass(
-            rollout['states'], actions, valid_mask
+            rollout["states"], actions, valid_mask
         )
 
         # Compute losses
@@ -119,8 +128,11 @@ class LossComputer:
         old_values_filtered = values[:-1][valid_mask]
         returns_filtered = returns[valid_mask]
         value_loss = compute_value_loss(
-            new_values, old_values_filtered, returns_filtered,
-            clip_eps=self.clip_eps, use_clipping=True
+            new_values,
+            old_values_filtered,
+            returns_filtered,
+            clip_eps=self.clip_eps,
+            use_clipping=True,
         )
 
         kl_div = compute_kl_divergence(new_log_probs, old_log_probs)
@@ -129,7 +141,11 @@ class LossComputer:
         entropy_loss = -entropies.mean()
 
         # Combined loss
-        loss = policy_loss + self.value_loss_coeff * value_loss + self.entropy_loss_coeff * entropy_loss
+        loss = (
+            policy_loss
+            + self.value_loss_coeff * value_loss
+            + self.entropy_loss_coeff * entropy_loss
+        )
 
         return loss, policy_loss, value_loss, entropy_loss, kl_div
 
@@ -154,17 +170,29 @@ class LossComputer:
             state = states[idx]
             logits, v = self.agent(state)
 
-            # Create action mask
+            # Create action mask: 正确处理已ban和已选的英雄
             mask = self._base_mask.clone()
-            heroes = state['action_history']['heroes']
-            used = set(heroes.view(-1).tolist()) if heroes.numel() > 0 else set()
-            for h in used:
+
+            # 从state中获取所有已使用的英雄（包括pick和ban）
+            used_heroes = set()
+
+            # 处理action history中的所有英雄（包括pick和ban）
+            # 注意：需要从action history中区分pick和ban动作
+            if state["action_history"]["heroes"].numel() > 0:
+                teams = state["action_history"]["teams"].view(-1)
+                act_types = state["action_history"]["actions"].view(-1)
+                heroes = state["action_history"]["heroes"].view(-1)
+
+                for t, a, h in zip(teams, act_types, heroes):
+                    used_heroes.add(h.item())  # 所有动作的英雄都加入used集合
+
+            # 应用mask
+            for h in used_heroes:
                 if h < NUM_HEROES:
                     mask[h] = -1e9
 
             logits = logits + mask
 
-            # Compute log prob for the action
             probs = torch.softmax(logits, dim=-1)
             dist = torch.distributions.Categorical(probs)
             new_log_probs_list.append(dist.log_prob(actions[action_idx]))
@@ -187,7 +215,7 @@ class LossComputer:
         mask = self._base_mask.clone()
 
         # Block used heroes
-        heroes = state['action_history']['heroes']
+        heroes = state["action_history"]["heroes"]
         used = set(heroes.view(-1).tolist()) if heroes.numel() > 0 else set()
         for h in used:
             if h < NUM_HEROES:

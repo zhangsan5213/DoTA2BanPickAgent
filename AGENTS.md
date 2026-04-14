@@ -74,7 +74,6 @@ Dota 2 Ban Pick Agent 是一个基于强化学习的项目，用于训练 AI 代
 │
 ├── train_winrate_oracle.py     # WinRateOracle 训练脚本
 ├── train_bp_agent.py           # BP Agent 主训练脚本
-├── train_bp_agent_new.py       # 新架构训练脚本（使用 trainer/ 模块）
 └── eval_bp_agent.py            # 评估脚本（锦标赛模式）
 ```
 
@@ -105,7 +104,7 @@ Dota 2 Ban Pick Agent 是一个基于强化学习的项目，用于训练 AI 代
 - PlayerEncoder: 编码 5 位玩家的英雄偏好
 - TransformerEncoder: 4 层，8 头，256 维嵌入
 - Policy Head: 输出 NUM_HEROES (160) 维动作概率
-- Value Head: 输出状态价值估计
+- Value Head: 输出状态价值估计（使用双 CLS token，分别对应 Radiant / Dire 视角）
 
 ### 3. 环境（BPState）
 
@@ -153,13 +152,18 @@ python train_bp_agent.py --config configs/bp_agent_config_debug.yaml
 ```
 
 配置参数（`configs/bp_agent_config.yaml`）:
-- `actor_lr`: 3e-4（策略网络学习率）
+- `actor_lr`: 5e-5（策略网络学习率）
 - `value_loss_coeff`: 2.0（价值损失系数）
 - `entropy_loss_coeff`: 0.03（熵损失系数）
 - `rating.method`: "trueskill" 或 "elo"
 - `training.epochs`: 32（训练轮数）
-- `training.batch_size`: 32（批次大小）
-- `training.historical_opponent_prob`: 0.6（60% 对局使用历史对手）
+- `training.batch_size`: 128（批次大小）
+- `training.historical_opponent_prob`: 0.2（20% 对局使用历史对手）
+- `training.policy_staleness_tolerance`: 2（最近 N 个历史 ckpt 的对手数据也参与训练）
+- `training.num_strata`: 3（TrueSkill 分层抽样的层数）
+- `ppo.minibatch_size`: 64（PPO 小批量大小）
+- `ppo.ppo_epochs`: 4（每批 rollout 的 PPO 更新轮数）
+- `ppo.kl_threshold`: 0.1（KL 早停阈值）
 
 ### 3. 评估代理
 
@@ -246,10 +250,12 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 1. **监督预训练阶段**: WinRateOracle 在真实高 MMR 比赛数据上训练，预测胜率
 2. **强化学习微调阶段**: 
-   - 代理与自己对战（40%）或与历史版本对战（60%）
+   - 代理与自己对战（80%）或与历史版本对战（20%）
    - Oracle 在每个 Ban/Pick 序列结束时提供奖励
    - 每 N 个 epoch 进行评估，新代理与现有检查点对战并评分
    - 评分较高的代理更可能被采样为对手，推动持续改进
+   - 历史对手采用 **TrueSkill 分层抽样**，确保弱、中、强对手均匀覆盖
+   - **Policy Staleness Tolerance**：最近 2 个历史检查点的对手数据也纳入训练，增加样本多样性
 
 ### PPO 训练参数
 
@@ -257,6 +263,11 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 - **Lambda**: 0.95（GAE 参数）
 - **Clip Epsilon**: 0.2（PPO 裁剪参数）
 - **Value Clip Epsilon**: 0.2（价值裁剪参数）
+- **PPO Epochs**: 4（每批 rollout 复用 4 轮 PPO 更新）
+- **Minibatch Size**: 64（所有有效 steps 打平后按 minibatch 随机 shuffle 更新）
+- **KL Threshold**: 0.1（超过则触发 PPO 早停）
+- **Max Grad Norm**: 0.5（梯度裁剪阈值）
+- **GAE 设计**：Radiant / Dire 分别独立计算 GAE，奖励映射到 [-1, 1]，且 `dones[-1] = 1.0` 保证 terminal episode 不 bootstrap
 
 ## 评分系统
 
@@ -297,7 +308,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 1. **英雄 ID 处理**: 数据文件中使用 1-based ID（1-160），模型内部使用 0-based ID（0-159），注意转换
 2. **有效英雄过滤**: 使用 `get_valid_hero_ids()` 获取实际存在的英雄 ID 集合
 3. **动作掩码**: 在策略输出上应用掩码，防止选择已使用或不存在的英雄
-4. **奖励计算**: 对于 Dire 方，奖励为 `1.0 - radiant_win_prob`
+4. **奖励计算**: Oracle 输出的 Radiant 胜率 `p` 先映射到 `[-1, 1]`（`2p - 1`），Radiant 获得 `+mapped_reward`，Dire 获得 `-mapped_reward`（zero-sum 对称设计）
 
 ## 调试技巧
 

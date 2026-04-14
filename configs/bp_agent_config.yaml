@@ -1,7 +1,7 @@
 # BP Agent Training Configuration (GITCGRL-inspired)
 
 # Training hyperparameters
-actor_lr: 5e-5
+actor_lr: 4e-5
 
 # Policy temperature (GITCGRL-inspired exploration control)
 # High temperature -> more random exploration during rollouts
@@ -12,7 +12,7 @@ agent_temperature: 1.0
 agent_learnable_temperature: false
 
 # Loss coefficients
-value_loss_coeff: 2
+value_loss_coeff: 1.6
 entropy_loss_coeff: 0.03
 
 # Entropy 退火配置
@@ -61,7 +61,7 @@ rating:
 ppo:
   # PPO Clip参数
   clip_ratio: 0.2             # PPO clip epsilon
-  value_clip_ratio: 0.2       # Value function clip epsilon
+  value_clip_ratio: 1.0       # Value function clip epsilon (effectively disabled for [-1,1] returns)
   
   # PPO Epoch Loop (关键改进：复用数据多次更新)
   ppo_epochs: 4               # 每批rollout训练几轮PPO (GITCGRL: 4-16)
@@ -112,12 +112,12 @@ lr_scheduler:
 # Training defaults (used in __main__)
 training:
   epochs: 32
-  batch_size: 128  # each batch, all samples are used for rollouts
+  batch_size: 64  # each batch, all samples are used for rollouts
   gradient_accumulation_steps: 8  # 梯度累积步数
-  effective_batch_size: 1024      # batch_size * accumulation_steps
-  samples_per_epoch: 8192         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
+  effective_batch_size: 512       # batch_size * accumulation_steps
+  samples_per_epoch: 4096         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
   use_tensorboard: true
-  historical_opponent_prob: 0.25  # 25% vs 历史模型 (GITCGRL style)
+  historical_opponent_prob: 0.3   # 30% vs 历史模型 (GITCGRL style)
   policy_staleness_tolerance: 2   # 最近N个历史ckpt的对手数据也参与训练
   num_strata: 3                   # TrueSkill 分层抽样的层数
   checkpoint_dirs:

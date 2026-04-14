@@ -146,7 +146,7 @@ class LossComputer:
                 team_rewards.unsqueeze(-1),
                 team_values.unsqueeze(-1),
                 team_dones.unsqueeze(-1),
-                normalize_returns=True,
+                normalize_returns=False,
             )
             advantages = advantages.squeeze(-1)
             returns = returns.squeeze(-1)

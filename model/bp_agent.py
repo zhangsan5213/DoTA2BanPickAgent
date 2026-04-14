@@ -81,7 +81,7 @@ class PlayerEncoder(nn.Module):
 
 
 class BPTransformerAgent(nn.Module):
-    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=4, learnable_temperature=False):
+    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=6, learnable_temperature=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heroes = NUM_HEROES
@@ -108,13 +108,13 @@ class BPTransformerAgent(nn.Module):
 
         self.policy_head = nn.Linear(embed_dim, NUM_HEROES)
         self.value_head = nn.Sequential(
-            nn.Linear(embed_dim, 256),
+            nn.Linear(embed_dim, 512),
             nn.SiLU(),
             nn.Dropout(0.1),
-            nn.Linear(256, 128),
+            nn.Linear(512, 256),
             nn.SiLU(),
             nn.Dropout(0.1),
-            nn.Linear(128, 1),
+            nn.Linear(256, 1),
         )
         # 为 value head 的线性层设置识别属性
         for i, module in enumerate(self.value_head):

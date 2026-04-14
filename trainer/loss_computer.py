@@ -1,10 +1,8 @@
-"""Loss computation for PPO training."""
+"""Loss computation for PPO training (GITCGRL-inspired design)."""
 
 from typing import Dict, List, Tuple, Optional
 import torch
 import torch.nn.functional as F
-from functools import lru_cache
-
 from utils.bp_env import compute_gae, ppo_loss, normalize_advantages, compute_value_loss
 from utils.raw_data import NUM_HEROES, get_valid_hero_ids
 from utils.device import DEVICE
@@ -33,44 +31,47 @@ def compute_entropy(
 def compute_kl_divergence(
     new_log_probs: torch.Tensor, old_log_probs: torch.Tensor
 ) -> float:
-    """Compute KL divergence (true KL from old to new).
+    """Compute approximate KL divergence (PPO standard).
 
-    KL(old || new) = sum_{a} old_policy(a) * (log old_policy(a) - log new_policy(a))
+    approx_kl = mean((ratio - 1) - log(ratio))
+    This is more stable than true KL when using sampled actions.
 
     Args:
         new_log_probs: New policy log probabilities
         old_log_probs: Old policy log probabilities
 
     Returns:
-        KL divergence
+        Approximate KL divergence
     """
-    # Compute in probability space for numerical stability
-    old_probs = torch.exp(old_log_probs)
-    kl = (old_probs * (old_log_probs - new_log_probs)).sum()
-    return kl.item()
+    ratio = torch.exp(new_log_probs - old_log_probs)
+    approx_kl = ((ratio - 1) - ratio.log()).mean()
+    return approx_kl.item()
 
 
 class LossComputer:
-    """Computes PPO losses for a rollout."""
+    """Computes PPO losses for rollouts (GITCGRL-style)."""
 
     def __init__(
         self,
         agent,
-        value_loss_coeff: float = 2.0,
-        entropy_loss_coeff: float = 0.03,
+        value_loss_coeff: float = 0.5,  # GITCGRL default
+        entropy_loss_coeff: float = 0.01,  # GITCGRL default
         clip_eps: float = 0.2,
+        value_clip_eps: float = 0.2,
     ):
         """
         Args:
             agent: The agent model
-            value_loss_coeff: Coefficient for value loss
-            entropy_loss_coeff: Coefficient for entropy loss
+            value_loss_coeff: Coefficient for value loss (GITCGRL: 0.5)
+            entropy_loss_coeff: Coefficient for entropy loss (GITCGRL: 0.01)
             clip_eps: Clipping epsilon for PPO
+            value_clip_eps: Value function clipping epsilon
         """
         self.agent = agent
         self.value_loss_coeff = value_loss_coeff
         self.entropy_loss_coeff = entropy_loss_coeff
         self.clip_eps = clip_eps
+        self.value_clip_eps = value_clip_eps
         self.valid_hero_ids = get_valid_hero_ids()
 
         # Precompute valid hero mask (cached)
@@ -84,141 +85,278 @@ class LossComputer:
                 mask[h - 1] = 0.0
         return mask
 
-    def compute(self, rollout: Dict) -> tuple:
-        """Compute losses for a single rollout.
+    def prepare_rollout(self, rollout_data: Dict) -> Optional[Dict]:
+        """Prepare a single rollout: compute GAE per team and return flattened valid data.
 
         Args:
-            rollout: Dictionary containing rollout data
+            rollout_data: Dictionary containing prepared rollout tensors
+
+        Returns:
+            Dictionary with flattened valid tensors, or None if empty.
+        """
+        valid_mask = rollout_data["valid_mask"]
+        actions = rollout_data["actions"]
+        old_log_probs = rollout_data["old_log_probs"]
+        values = rollout_data["values"]
+        rewards = rollout_data["rewards"]
+        states = rollout_data["states"]
+        step_teams = rollout_data.get("step_teams")
+
+        valid_indices = valid_mask.nonzero(as_tuple=True)[0]
+        if len(valid_indices) == 0:
+            return None
+
+        actions_valid = actions[valid_mask]
+        old_log_probs_valid = old_log_probs[valid_mask]
+
+        # Map final reward to [-1, 1]
+        final_reward = rewards[-1].item() if rewards.numel() > 0 else 0.0
+        mapped_reward = 2.0 * final_reward - 1.0
+
+        # values shape: [T+1], last is bootstrap value
+        step_values = values[:-1]
+        bootstrap_value = values[-1]
+
+        T = len(states)
+        all_advantages = torch.empty(T, device=DEVICE)
+        all_returns = torch.empty(T, device=DEVICE)
+        all_old_values = torch.empty(T, device=DEVICE)
+
+        # Compute GAE separately for each team
+        for team_id, team_reward in [(0, mapped_reward), (1, -mapped_reward)]:
+            if step_teams is not None and len(step_teams) > 0:
+                team_mask = step_teams == team_id
+            else:
+                # Fallback: treat all steps as Radiant
+                team_mask = torch.ones(T, dtype=torch.bool, device=DEVICE) if team_id == 0 else torch.zeros(T, dtype=torch.bool, device=DEVICE)
+
+            team_indices = team_mask.nonzero(as_tuple=True)[0]
+            if len(team_indices) == 0:
+                continue
+
+            team_rewards = torch.zeros(len(team_indices), device=DEVICE)
+            team_rewards[-1] = team_reward
+            team_dones = torch.zeros(len(team_indices), device=DEVICE)
+            team_dones[-1] = 1.0
+
+            team_step_values = step_values[team_mask]
+            team_values = torch.cat([team_step_values, bootstrap_value.unsqueeze(0)])
+
+            advantages, returns = compute_gae(
+                team_rewards.unsqueeze(-1),
+                team_values.unsqueeze(-1),
+                team_dones.unsqueeze(-1),
+                normalize_returns=True,
+            )
+            advantages = advantages.squeeze(-1)
+            returns = returns.squeeze(-1)
+
+            all_advantages[team_indices] = advantages
+            all_returns[team_indices] = returns
+            all_old_values[team_indices] = team_step_values
+
+        # Filter valid data
+        advantages_valid = all_advantages[valid_mask]
+        returns_valid = all_returns[valid_mask]
+        old_values_valid = all_old_values[valid_mask]
+        states_valid = [states[i] for i in valid_indices.tolist()]
+
+        return {
+            "states": states_valid,
+            "actions": actions_valid,
+            "old_log_probs": old_log_probs_valid,
+            "advantages": advantages_valid,
+            "returns": returns_valid,
+            "old_values": old_values_valid,
+        }
+
+    def compute_minibatch(
+        self,
+        states: List[Dict],
+        actions: torch.Tensor,
+        old_log_probs: torch.Tensor,
+        advantages: torch.Tensor,
+        returns: torch.Tensor,
+        old_values: torch.Tensor,
+        entropy_coeff: Optional[float] = None,
+    ) -> Optional[tuple]:
+        """Compute losses for a minibatch of flattened data.
+
+        Args:
+            states: List of state dicts (flattened valid steps)
+            actions: [N] action indices
+            old_log_probs: [N] old log probabilities
+            advantages: [N] advantages
+            returns: [N] returns
+            old_values: [N] old value estimates
+            entropy_coeff: Dynamic entropy coefficient
 
         Returns:
             Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div)
         """
-        valid_mask = rollout["valid_mask"].to(DEVICE)
-        actions = rollout["actions"].to(DEVICE)
-        old_log_probs = rollout["log_probs"].to(DEVICE)
-        values = rollout["values"].to(DEVICE)
-        rewards = rollout["rewards"].to(DEVICE)
+        if len(actions) == 0:
+            return None
 
-        actions = actions[valid_mask]
-        old_log_probs = old_log_probs[valid_mask]
-
-        # Compute GAE
-        T = len(rewards)
-        dones = torch.zeros(T, device=DEVICE)
-        advantages, returns = compute_gae(
-            rewards.unsqueeze(-1),
-            values.unsqueeze(-1),
-            dones.unsqueeze(-1),
-            normalize_returns=True,
-        )
-        advantages = advantages.squeeze(-1)
-        returns = returns.squeeze(-1)
-
-        # Normalize advantages
+        # Normalize advantages over the minibatch (standard PPO)
         advantages = normalize_advantages(advantages)
 
-        # Compute all policy outputs in a single pass (no duplicate forward passes)
-        new_log_probs, new_values, entropies = self._compute_policy_outputs_single_pass(
-            rollout["states"], actions, valid_mask
+        new_log_probs, new_values, entropies = self._compute_policy_outputs_optimized(
+            states, actions
         )
 
         # Compute losses
-        policy_loss = ppo_loss(new_log_probs, old_log_probs, advantages)
+        policy_loss = ppo_loss(new_log_probs, old_log_probs, advantages, clip_eps=self.clip_eps)
 
-        old_values_filtered = values[:-1][valid_mask]
-        returns_filtered = returns[valid_mask]
         value_loss = compute_value_loss(
             new_values,
-            old_values_filtered,
-            returns_filtered,
-            clip_eps=self.clip_eps,
+            old_values,
+            returns,
+            clip_eps=self.value_clip_eps,
             use_clipping=True,
         )
 
         kl_div = compute_kl_divergence(new_log_probs, old_log_probs)
-
-        # Use precomputed entropies
         entropy_loss = -entropies.mean()
 
-        # Combined loss
-        loss = (
-            policy_loss
-            + self.value_loss_coeff * value_loss
-            + self.entropy_loss_coeff * entropy_loss
-        )
+        coeff = entropy_coeff if entropy_coeff is not None else self.entropy_loss_coeff
+        loss = policy_loss + self.value_loss_coeff * value_loss + coeff * entropy_loss
 
         return loss, policy_loss, value_loss, entropy_loss, kl_div
 
-    def _compute_policy_outputs_single_pass(
-        self, states, actions, valid_mask
+    def _compute_policy_outputs_optimized(
+        self, states: List[Dict], actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Compute new log probabilities, values, and entropies in a single forward pass.
+        """优化版本：按history长度分组，组内batch处理。
+        
+        核心优化：相同history长度的states可以安全地组成batch进行单次前向传播，
+        避免了为不同长度进行复杂padding的问题。
 
-        This avoids calling agent(state) twice for the same state.
+        Args:
+            states: List of state dicts (already filtered to valid steps)
+            actions: [N] action indices corresponding to states
 
         Returns:
             Tuple of (new_log_probs, new_values, entropies)
         """
-        new_log_probs_list = []
-        new_values = []
-        entropies_list = []
+        num_steps = len(states)
+        if num_steps == 0:
+            return (
+                torch.tensor([], device=DEVICE),
+                torch.tensor([], device=DEVICE),
+                torch.tensor([], device=DEVICE),
+            )
 
-        valid_indices = valid_mask.nonzero(as_tuple=True)[0]
-        action_idx = 0
+        # 按history长度分组
+        groups = {}
+        for action_idx, state in enumerate(states):
+            hist_len = state["action_history"]["heroes"].shape[1] if state["action_history"]["heroes"].dim() > 1 else state["action_history"]["heroes"].shape[0]
+            if hist_len not in groups:
+                groups[hist_len] = []
+            groups[hist_len].append(action_idx)
 
-        for idx in valid_indices:
-            state = states[idx]
-            logits, v = self.agent(state)
+        # 收集结果
+        all_new_log_probs = [None] * num_steps
+        all_new_values = [None] * num_steps
+        all_entropies = [None] * num_steps
 
-            # Create action mask: 正确处理已ban和已选的英雄
-            mask = self._base_mask.clone()
+        # 对每个组进行batch处理
+        for hist_len, action_indices in groups.items():
+            group_states = [states[i] for i in action_indices]
+            
+            # 打包成batch
+            batch_state = self._pack_states(group_states)
+            
+            # 单次前向传播（需要梯度，用于反向传播）
+            batch_logits, batch_values = self.agent(batch_state)
+            
+            # 批量构建mask并处理
+            batch_mask = self._build_batch_action_mask(group_states)
+            batch_logits = batch_logits + batch_mask
+            
+            # 应用策略温度（如果 agent 支持），使 temperature 参与梯度计算
+            temp = self.agent.get_temperature() if hasattr(self.agent, 'get_temperature') else 1.0
+            batch_logits_temp = batch_logits / temp
+            
+            # 批量计算概率和entropy（基于带温度的分布）
+            batch_probs = torch.softmax(batch_logits_temp, dim=-1)
+            batch_log_probs = torch.log_softmax(batch_logits_temp, dim=-1)
+            
+            # 获取对应动作的log_prob
+            group_actions = actions[action_indices]
+            group_new_log_probs = batch_log_probs.gather(1, group_actions.unsqueeze(1)).squeeze(1)
+            group_entropies = -(batch_probs * batch_log_probs).sum(dim=-1)
+            
+            # 保存结果
+            for i, action_idx in enumerate(action_indices):
+                all_new_log_probs[action_idx] = group_new_log_probs[i]
+                all_new_values[action_idx] = batch_values[i].squeeze(-1)
+                all_entropies[action_idx] = group_entropies[i]
 
-            # 从state中获取所有已使用的英雄（包括pick和ban）
-            used_heroes = set()
-
-            # 处理action history中的所有英雄（包括pick和ban）
-            # 注意：需要从action history中区分pick和ban动作
-            if state["action_history"]["heroes"].numel() > 0:
-                teams = state["action_history"]["teams"].view(-1)
-                act_types = state["action_history"]["actions"].view(-1)
-                heroes = state["action_history"]["heroes"].view(-1)
-
-                for t, a, h in zip(teams, act_types, heroes):
-                    used_heroes.add(h.item())  # 所有动作的英雄都加入used集合
-
-            # 应用mask
-            for h in used_heroes:
-                if h < NUM_HEROES:
-                    mask[h] = -1e9
-
-            logits = logits + mask
-
-            probs = torch.softmax(logits, dim=-1)
-            dist = torch.distributions.Categorical(probs)
-            new_log_probs_list.append(dist.log_prob(actions[action_idx]))
-            new_values.append(v.squeeze(-1))
-
-            # Compute entropy (used for entropy loss)
-            entropy = -(probs * torch.log_softmax(logits, dim=-1)).sum()
-            entropies_list.append(entropy)
-
-            action_idx += 1
-
-        new_log_probs = torch.stack(new_log_probs_list)
-        new_values = torch.cat(new_values)
-        entropies = torch.stack(entropies_list)
+        # 堆叠成tensor
+        new_log_probs = torch.stack(all_new_log_probs)
+        new_values = torch.stack(all_new_values)
+        entropies = torch.stack(all_entropies)
 
         return new_log_probs, new_values, entropies
 
-    def _create_action_mask(self, state) -> torch.Tensor:
-        """Create action mask for valid and used heroes."""
-        mask = self._base_mask.clone()
+    def _pack_states(self, states: List[Dict]) -> Dict:
+        """将相同history长度的states列表打包成batch。
+        
+        由于传入的states都有相同的history长度，不需要padding处理。
+        """
+        batch_size = len(states)
+        
+        # 提取玩家特征
+        r_player_feats = torch.cat([s["radiant_player_feats"] for s in states], dim=0)
+        d_player_feats = torch.cat([s["dire_player_feats"] for s in states], dim=0)
+        
+        # 提取current_actor和current_action
+        current_actor = torch.cat([s["current_actor"] for s in states], dim=0)
+        current_action = torch.cat([s["current_action"] for s in states], dim=0)
+        
+        # 提取action_history（所有state长度相同）
+        if states[0]["action_history"]["heroes"].shape[1] > 0:
+            teams = torch.cat([s["action_history"]["teams"] for s in states], dim=0)
+            actions = torch.cat([s["action_history"]["actions"] for s in states], dim=0)
+            heroes = torch.cat([s["action_history"]["heroes"] for s in states], dim=0)
+        else:
+            # 空history
+            teams = torch.zeros(batch_size, 0, dtype=torch.long, device=DEVICE)
+            actions = torch.zeros(batch_size, 0, dtype=torch.long, device=DEVICE)
+            heroes = torch.zeros(batch_size, 0, dtype=torch.long, device=DEVICE)
+        
+        return {
+            "radiant_player_feats": r_player_feats,
+            "dire_player_feats": d_player_feats,
+            "action_history": {
+                "teams": teams,
+                "actions": actions,
+                "heroes": heroes,
+            },
+            "current_actor": current_actor,
+            "current_action": current_action,
+        }
 
-        # Block used heroes
-        heroes = state["action_history"]["heroes"]
-        used = set(heroes.view(-1).tolist()) if heroes.numel() > 0 else set()
-        for h in used:
-            if h < NUM_HEROES:
-                mask[h] = -1e9
-
-        return mask
+    def _build_batch_action_mask(self, states: List[Dict]) -> torch.Tensor:
+        """批量构建action mask。
+        
+        Args:
+            states: 状态列表（相同history长度）
+        
+        Returns:
+            batch_mask: [B, NUM_HEROES] mask张量
+        """
+        batch_size = len(states)
+        batch_mask = self._base_mask.unsqueeze(0).expand(batch_size, -1).clone()
+        
+        for i, state in enumerate(states):
+            # 从state中获取已使用的英雄
+            if state["action_history"]["heroes"].numel() > 0:
+                # 获取这个state中所有已使用的英雄（包括pick和ban）
+                heroes = state["action_history"]["heroes"].squeeze(0)  # [T]
+                for h in heroes:
+                    h_id = h.item()
+                    if h_id < NUM_HEROES:
+                        batch_mask[i, h_id] = -1e9
+        
+        return batch_mask

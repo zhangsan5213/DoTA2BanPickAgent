@@ -1,11 +1,33 @@
-# BP Agent Training Configuration
+# BP Agent Training Configuration (GITCGRL-inspired)
 
 # Training hyperparameters
-actor_lr: 3e-4
+actor_lr: 5e-5
 
-# Loss coefficients (relative to actor = 1.0)
-value_loss_coeff: 2.0    # value_loss coefficient
-entropy_loss_coeff: 0.03  # entropy_loss coefficient
+# Policy temperature (GITCGRL-inspired exploration control)
+# High temperature -> more random exploration during rollouts
+# Low temperature -> more greedy exploitation
+# PPO updates are always computed on the temperature=1.0 policy (target policy)
+# Only the behavior policy (sampling) uses this temperature
+agent_temperature: 1.0
+agent_learnable_temperature: false
+
+# Loss coefficients
+value_loss_coeff: 2
+entropy_loss_coeff: 0.03
+
+# Entropy 退火配置
+entropy_annealing:
+  enabled: false           # 默认禁用，向后兼容
+  initial_coeff: 0.03      # 初始熵系数
+  final_coeff: 0.01       # 最终熵系数
+  type: "linear"           # 可选: linear, exponential, cosine
+  
+  # 按epoch退火参数
+  total_epochs: 32         # 退火总epoch数（通常等于训练epochs）
+  
+  # 按步数退火参数（优先于epoch）
+  warmup_steps: 1000       # 前N步保持initial_coeff
+  annealing_steps: 10000   # 退火步数
 
 # TensorBoard
 tensorboard_log_prefix: "bp_agent_exp_"
@@ -13,7 +35,7 @@ tensorboard_log_prefix: "bp_agent_exp_"
 # Rating/Evaluation config
 rating:
   method: "trueskill"  # "elo" or "trueskill"
-  eval_interval: 2      # evaluate every N epochs
+  eval_interval: 1      # evaluate every N epochs
   num_opponents: 8      # opponents per evaluation
   num_player_sets: 16   # player sets per opponent
 
@@ -33,14 +55,70 @@ rating:
     draw_probability: 0.0
     opponent_sample_std: 2.0
     staleness_threshold: 4
-    num_active_models: 5
+    num_active_models: 16
+
+# PPO Configuration (GITCGRL-inspired)
+ppo:
+  # PPO Clip参数
+  clip_ratio: 0.2             # PPO clip epsilon
+  value_clip_ratio: 0.2       # Value function clip epsilon
+  
+  # PPO Epoch Loop (关键改进：复用数据多次更新)
+  ppo_epochs: 4               # 每批rollout训练几轮PPO (GITCGRL: 4-16)
+  
+  # Minibatch size for PPO updates (standard PPO uses 64-512)
+  minibatch_size: 64
+  
+  # KL控制策略：早停而非跳过
+  kl_threshold: 0.1           # KL阈值，超过则触发早停 (GITCGRL: 0.02-0.05)
+  kl_early_stop: true         # 启用KL早停机制
+  kl_warning_threshold: 0.05  # KL警告阈值
+  
+  # 梯度裁剪 (GITCGRL关键技巧)
+  max_grad_norm: 0.5          # 梯度裁剪阈值 (0 = 禁用)
+  
+  # 自适应学习率（保持禁用）
+  kl_adaptive_learning_rate: false
+  kl_lr_decay_factor: 0.5     
+  kl_violation_ratio_threshold: 0.8
+
+# 学习率调度配置
+lr_scheduler:
+  enabled: false  # 默认禁用，向后兼容
+  type: "cosine"  # 可选: cosine, exponential, step, plateau
+  
+  # Cosine Annealing 参数
+  cosine:
+    T_max: 32           # 最大周期（通常等于epochs）
+    eta_min: 1e-6       # 最小学习率
+    warmup_epochs: 2    # 预热epoch数（可选）
+  
+  # Exponential Decay 参数
+  exponential:
+    gamma: 0.96         # 每epoch衰减因子
+  
+  # Step Decay 参数
+  step:
+    step_size: 10       # 每N个epoch衰减
+    gamma: 0.1          # 衰减因子
+  
+  # ReduceLROnPlateau 参数
+  plateau:
+    mode: "min"         # min/max
+    factor: 0.5         # 衰减因子
+    patience: 3         # 容忍epoch数
+    min_lr: 1e-7        # 最小学习率
 
 # Training defaults (used in __main__)
 training:
   epochs: 32
-  batch_size: 32  # each batch, all samples are used for rollouts (no wasted computation)
-  samples_per_epoch: 1024
+  batch_size: 128  # each batch, all samples are used for rollouts
+  gradient_accumulation_steps: 8  # 梯度累积步数
+  effective_batch_size: 1024      # batch_size * accumulation_steps
+  samples_per_epoch: 8192         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
   use_tensorboard: true
-  historical_opponent_prob: 0.6  # 60% of rollouts use historical vs current; 40% self-play
+  historical_opponent_prob: 0.25  # 25% vs 历史模型 (GITCGRL style)
+  policy_staleness_tolerance: 2   # 最近N个历史ckpt的对手数据也参与训练
+  num_strata: 3                   # TrueSkill 分层抽样的层数
   checkpoint_dirs:
     - "./ckpts/bp_agent-trueskill"  # directories to scan for historical checkpoints

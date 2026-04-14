@@ -309,7 +309,8 @@ def compute_value_loss(
 
 
 def collect_rollout(
-    agent, oracle, sample, max_steps=24, opponent_agent=None, current_side="radiant"
+    agent, oracle, sample, max_steps=24, opponent_agent=None, current_side="radiant",
+    temperature=None, policy_staleness_tolerance=0, opponent_staleness=None
 ):
     """Collect one BP trajectory.
 
@@ -322,6 +323,8 @@ def collect_rollout(
             plays both sides (self-play).
         current_side: "radiant" or "dire" - which side the current agent plays on.
             Only relevant when opponent_agent is not None.
+        temperature: Action sampling temperature. If None, uses agent's internal temperature.
+            High temperature -> more exploration; low temperature -> more exploitation.
     """
     # 从agent获取设备信息
     device = next(agent.parameters()).device
@@ -339,13 +342,14 @@ def collect_rollout(
         step_idx=0,
     )
 
-    states, actions, log_probs, values, rewards, valid_mask = (
+    states, actions, log_probs, values, rewards, valid_mask, step_teams = (
         [],
         [],
         [],
         [],
         [],
         [],
+        [],  # 记录每一步是哪个team执行的: 0=Radiant, 1=Dire
     )
     step = 0
 
@@ -353,6 +357,8 @@ def collect_rollout(
         state_dict = s.to_dict(device=device)
 
         is_radiant_turn = s.is_radiant_turn
+        current_team = 0 if is_radiant_turn else 1  # 0=Radiant, 1=Dire
+        
         if opponent_agent is not None:
             if is_radiant_turn:
                 active_agent = agent if current_side == "radiant" else opponent_agent
@@ -378,27 +384,39 @@ def collect_rollout(
                 mask[h - 1] = -1e9
         action_logits = action_logits + mask
 
-        probs = F.softmax(action_logits, dim=-1)
-        dist = torch.distributions.Categorical(probs)
+        # 获取采样温度（可学习参数或固定超参数）
+        if temperature is None and hasattr(active_agent, 'get_temperature'):
+            temp = active_agent.get_temperature().item()
+        else:
+            temp = temperature if temperature is not None else 1.0
 
+        # 带温度概率：用于实际动作采样和 old_log_prob 记录
+        # PPO 端到端学习 temperature，因此 loss 计算也基于此分布
+        probs = F.softmax(action_logits / temp, dim=-1)
+        dist = torch.distributions.Categorical(probs)
         hero_id = dist.sample().item() + 1
         log_prob = dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
 
         # Mark whether this step belongs to the current agent
         if opponent_agent is None:
-            is_current = True
+            is_current = True  # 自对弈：所有步骤都用于训练
         else:
             is_current = (
                 (current_side == "radiant")
                 if is_radiant_turn
                 else (current_side == "dire")
             )
+            # Fresh opponents within tolerance also contribute training data
+            if not is_current and opponent_staleness is not None:
+                if opponent_staleness <= policy_staleness_tolerance:
+                    is_current = True
 
         states.append(state_dict)
         actions.append(hero_id - 1)
         log_probs.append(log_prob)
         values.append(value.item())
         valid_mask.append(is_current)
+        step_teams.append(current_team)  # 记录这一步是哪个team
 
         s.step(hero_id)
         step += 1
@@ -407,12 +425,15 @@ def collect_rollout(
     if final_reward is None:
         final_reward = 0.5
 
-    # 计算正确的奖励：
-    # final_reward 是 Radiant 胜率，对于 Radiant 要最大化，对于 Dire 要最小化
-    if current_side == "dire":
-        final_reward = 1.0 - final_reward
-
+    # 计算每一步的奖励：
+    # final_reward 是 Radiant 胜率
+    # - Radiant的决策：奖励 = final_reward（最大化Radiant胜率）
+    # - Dire的决策：奖励 = 1.0 - final_reward（最小化Radiant胜率，即最大化Dire胜率）
     rewards = [0.0] * (len(states) - 1) + [final_reward]
+    
+    # 在自对弈模式下，我们需要根据每一步的执行者调整奖励
+    # 存储step_teams供后续处理使用
+    step_teams_tensor = torch.tensor(step_teams, dtype=torch.long)
 
     # 修复bootstrap value bug：使用value网络的最终预测而不是final_reward
     # 这样value网络可以学习预测最终状态的真实值，而不是直接赋值
@@ -437,6 +458,7 @@ def collect_rollout(
         "values": torch.tensor(values + [final_value], dtype=torch.float32),
         "rewards": torch.tensor(rewards, dtype=torch.float32),
         "valid_mask": torch.tensor(valid_mask, dtype=torch.bool),
+        "step_teams": step_teams_tensor,  # 每一步的执行者: 0=Radiant, 1=Dire
     }
 
 

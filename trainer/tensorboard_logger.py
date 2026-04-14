@@ -32,13 +32,14 @@ class TensorBoardLogger:
         if not self.enabled:
             return None
 
-        # Start TensorBoard process
-        self.tb_process = self._start_tensorboard_process(self.log_dir, self.port)
+        # Start TensorBoard process with runs/ root to see all experiments
+        self.tb_process = self._start_tensorboard_process("runs", self.port)
 
-        # Create writer
+        # Create writer (still writes to specific subdir)
         self.writer = SummaryWriter(log_dir=self.log_dir)
         print(f"[+] TensorBoard writer initialized")
         print(f"[+] Log directory: {self.log_dir}")
+        print(f"[+] View all experiments at http://localhost:{self.port}")
 
         return self.writer
 

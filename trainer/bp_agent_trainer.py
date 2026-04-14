@@ -1,6 +1,7 @@
 """Main BP Agent Trainer."""
 
 import os
+import math
 from typing import Optional, Dict, Any
 
 import torch
@@ -14,7 +15,81 @@ from .loss_computer import LossComputer
 from .epoch_runner import EpochRunner
 from .evaluator import EvaluatorManager, save_checkpoint
 from .tensorboard_logger import TensorBoardLogger
-from .model_initializer import initialize_oracle, initialize_agent, initialize_optimizer
+from .model_initializer import initialize_oracle, initialize_agent, initialize_optimizer, initialize_scheduler
+
+
+class EntropyAnnealer:
+    """Entropy系数退火器，随训练进行逐渐降低探索度。"""
+    
+    def __init__(self, config):
+        """初始化退火器。
+        
+        Args:
+            config: TrainingConfig实例
+        """
+        self.enabled = config.entropy_annealing_enabled
+        self.initial = config.entropy_initial_coeff
+        self.final = config.entropy_final_coeff
+        self.type = config.entropy_annealing_type
+        self.total_epochs = config.entropy_annealing_epochs
+        self.warmup_steps = config.entropy_warmup_steps
+        self.annealing_steps = config.entropy_annealing_steps
+        self.current_step = 0
+        
+        if self.enabled:
+            print(f"[+] Entropy Annealing enabled: {self.initial:.4f} -> {self.final:.4f} ({self.type})")
+    
+    def get_coeff(self, epoch=None, step=None):
+        """获取当前entropy系数。
+        
+        Args:
+            epoch: 当前epoch（用于按epoch退火）
+            step: 当前step（用于按step退火，优先）
+        
+        Returns:
+            当前entropy系数，如果退火禁用则返回None
+        """
+        if not self.enabled:
+            return None  # 使用配置中的固定值
+        
+        if step is not None:
+            self.current_step = step
+        
+        # Warmup阶段
+        if self.current_step < self.warmup_steps:
+            return self.initial
+        
+        # 计算退火进度
+        if self.annealing_steps > 0:
+            progress = min(1.0, (self.current_step - self.warmup_steps) / self.annealing_steps)
+        elif epoch is not None and self.total_epochs > 0:
+            progress = min(1.0, epoch / self.total_epochs)
+        else:
+            return self.final
+        
+        # 根据类型计算当前系数
+        if self.type == "linear":
+            return self.initial + (self.final - self.initial) * progress
+        elif self.type == "exponential":
+            return self.initial * (self.final / self.initial) ** progress
+        elif self.type == "cosine":
+            return self.final + (self.initial - self.final) * (1 + math.cos(math.pi * progress)) / 2
+        else:
+            return self.initial
+    
+    def step(self):
+        """增加步数计数器。"""
+        self.current_step += 1
+    
+    def get_progress(self):
+        """获取当前退火进度（0-1）。"""
+        if not self.enabled:
+            return 0.0
+        if self.current_step < self.warmup_steps:
+            return 0.0
+        if self.annealing_steps > 0:
+            return min(1.0, (self.current_step - self.warmup_steps) / self.annealing_steps)
+        return 0.0
 
 
 class BPAgentTrainer:
@@ -35,6 +110,7 @@ class BPAgentTrainer:
         self.agent = None
         self.oracle = None
         self.optimizer = None
+        self.scheduler = None
         self.data_generator = None
         self.checkpoint_manager = None
         self.rollout_collector = None
@@ -77,6 +153,10 @@ class BPAgentTrainer:
         self.checkpoint_manager.print_summary()
 
         # Initialize rollout collector
+        rating_manager = None
+        if hasattr(self.evaluator, 'rating_evaluator') and hasattr(self.evaluator.rating_evaluator, 'rating_manager'):
+            rating_manager = self.evaluator.rating_evaluator.rating_manager
+
         self.rollout_collector = RolloutCollector(
             self.agent,
             self.oracle,
@@ -84,6 +164,10 @@ class BPAgentTrainer:
             embed_dim=self.config.agent_embed_dim,
             nhead=self.config.agent_nhead,
             num_layers=self.config.agent_num_layers,
+            temperature=self.config.agent_temperature,
+            policy_staleness_tolerance=self.config.policy_staleness_tolerance,
+            rating_manager=rating_manager,
+            num_strata=getattr(self.config, 'num_strata', 3),
         )
 
         # Initialize loss computer
@@ -91,7 +175,15 @@ class BPAgentTrainer:
             self.agent,
             value_loss_coeff=self.config.value_loss_coeff,
             entropy_loss_coeff=self.config.entropy_loss_coeff,
+            clip_eps=self.config.clip_ratio,
+            value_clip_eps=self.config.value_clip_ratio,
         )
+
+        # Initialize scheduler
+        self.scheduler = initialize_scheduler(self.optimizer, self.config)
+
+        # Initialize entropy annealer
+        self.entropy_annealer = EntropyAnnealer(self.config)
 
         # Initialize epoch runner
         self.epoch_runner = EpochRunner(
@@ -101,6 +193,7 @@ class BPAgentTrainer:
             self.rollout_collector,
             self.checkpoint_manager,
             self.config,
+            entropy_annealer=self.entropy_annealer,
         )
 
         # Initialize evaluator
@@ -138,6 +231,15 @@ class BPAgentTrainer:
                 epoch=epoch, total_epochs=epochs, samples=samples, writer=self.writer
             )
 
+            # Update learning rate
+            current_lr = self.optimizer.param_groups[0]['lr']
+            if self.scheduler is not None:
+                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(epoch_stats['total_loss'])
+                else:
+                    self.scheduler.step()
+                current_lr = self.optimizer.param_groups[0]['lr']
+
             print(
                 f"[+] Epoch {epoch + 1}/{epochs} - "
                 f"Loss: {epoch_stats['total_loss']:.4f}, "
@@ -145,7 +247,8 @@ class BPAgentTrainer:
                 f"Value: {epoch_stats['value_loss']:.4f}, "
                 f"Entropy: {epoch_stats['entropy_loss']:.4f}, "
                 f"KL: {epoch_stats['kl_div']:.4f}, "
-                f"Rollouts: {epoch_stats['num_rollouts']}"
+                f"Rollouts: {epoch_stats['num_rollouts']}, "
+                f"LR: {current_lr:.2e}"
             )
 
             # Log epoch summary to TensorBoard
@@ -166,6 +269,9 @@ class BPAgentTrainer:
                 self.writer.add_scalar(
                     "Epoch/num_rollouts", epoch_stats["num_rollouts"], epoch + 1
                 )
+                # Log learning rate
+                current_lr = self.optimizer.param_groups[0]['lr']
+                self.writer.add_scalar("Training/lr_epoch", current_lr, epoch + 1)
                 self.writer.flush()
 
             # Periodic evaluation

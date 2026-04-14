@@ -81,14 +81,21 @@ class PlayerEncoder(nn.Module):
 
 
 class BPTransformerAgent(nn.Module):
-    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=4):
+    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=4, learnable_temperature=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heroes = NUM_HEROES
 
+        # Temperature for action sampling (train: high for exploration, eval: low for exploitation)
+        if learnable_temperature:
+            self.temperature = nn.Parameter(torch.ones(1))
+        else:
+            self.register_buffer('temperature', torch.ones(1))
+        self.learnable_temperature = learnable_temperature
+
         self.action_encoder = ActionEncoder(embed_dim)
         self.player_encoder = PlayerEncoder(embed_dim)
-        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        self.cls_tokens = nn.Parameter(torch.randn(1, 2, embed_dim))  # [radiant, dire]
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embed_dim,
@@ -127,6 +134,22 @@ class BPTransformerAgent(nn.Module):
 
         # 应用统一的权重初始化，保证初始策略分布均匀，避免初始策略塌缩
         self.apply(init_weights)
+
+    def get_temperature(self):
+        """获取当前温度（用于动作采样），保证最小值防止除零。"""
+        return self.temperature.clamp(min=0.1)
+
+    def load_state_dict(self, state_dict, strict=True):
+        """兼容旧 checkpoint：自动补全缺失的参数。"""
+        if 'temperature' not in state_dict and hasattr(self, 'temperature'):
+            state_dict['temperature'] = torch.ones_like(self.temperature)
+        if 'learnable_temperature' not in state_dict:
+            pass
+        # 兼容旧 checkpoint 的单 cls_token -> 双 cls_tokens
+        if 'cls_token' in state_dict and 'cls_tokens' not in state_dict:
+            old_cls = state_dict.pop('cls_token')  # [1, 1, embed_dim]
+            state_dict['cls_tokens'] = torch.cat([old_cls, old_cls.clone()], dim=1)
+        super().load_state_dict(state_dict, strict=strict)
 
     def forward(self, state):
         """
@@ -167,7 +190,7 @@ class BPTransformerAgent(nn.Module):
             torch.cat([current_actor_emb, current_action_emb, current_hero_emb], dim=-1)
         ).unsqueeze(1)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)
+        cls_tokens = self.cls_tokens.expand(B, -1, -1)
         all_players = torch.cat([r_player_emb, d_player_emb], dim=1)
         seq = torch.cat([cls_tokens, all_players, action_emb, current_q], dim=1)
 
@@ -176,7 +199,10 @@ class BPTransformerAgent(nn.Module):
         policy_feat = out[:, -1, :]
         action_logits = self.policy_head(policy_feat)
 
-        cls_feat = out[:, 0, :]
+        radiant_cls_feat = out[:, 0, :]
+        dire_cls_feat = out[:, 1, :]
+        current_actor = state["current_actor"].unsqueeze(-1)  # [B, 1]
+        cls_feat = torch.where(current_actor == 0, radiant_cls_feat, dire_cls_feat)
         value = self.value_head(cls_feat)
 
         return action_logits, value

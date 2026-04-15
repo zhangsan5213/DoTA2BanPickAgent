@@ -21,6 +21,8 @@ class EpochRunner:
         checkpoint_manager,
         config,
         entropy_annealer=None,
+        start_global_step: int = 0,
+        start_grad_accum_step: int = 0,
     ):
         """
         Args:
@@ -31,6 +33,8 @@ class EpochRunner:
             checkpoint_manager: CheckpointManager instance
             config: TrainingConfig instance
             entropy_annealer: Optional EntropyAnnealer instance for dynamic entropy coefficient
+            start_global_step: Global step to resume from for TensorBoard continuity
+            start_grad_accum_step: Gradient accumulation step to resume from
         """
         self.agent = agent
         self.optimizer = optimizer
@@ -39,7 +43,8 @@ class EpochRunner:
         self.checkpoint_manager = checkpoint_manager
         self.config = config
         self.entropy_annealer = entropy_annealer
-        self.global_step = 0
+        self.global_step = start_global_step
+        self.grad_accum_step = start_grad_accum_step
 
     def run(
         self,
@@ -65,6 +70,7 @@ class EpochRunner:
 
         batch_size = self.config.batch_size
         num_batches = (len(samples) + batch_size - 1) // batch_size
+        grad_accum_steps = getattr(self.config, "gradient_accumulation_steps", 1)
 
         epoch_stats = {
             "total_loss": 0.0,
@@ -95,7 +101,7 @@ class EpochRunner:
             )
 
             # Process rollouts with PPO epoch loop (GITCGRL style)
-            batch_stats = self._process_rollouts_ppo_epochs(rollouts, writer)
+            batch_stats = self._process_rollouts_ppo_epochs(rollouts, writer, epoch=epoch)
 
             # Update epoch stats
             for key in [
@@ -137,7 +143,7 @@ class EpochRunner:
         return epoch_stats
 
     def _process_rollouts_ppo_epochs(
-        self, rollouts: List[Dict], writer
+        self, rollouts: List[Dict], writer, epoch: int = 0
     ) -> Dict[str, float]:
         """Process rollouts with true PPO minibatch updates and KL early stopping.
         
@@ -194,6 +200,12 @@ class EpochRunner:
         merged_returns = torch.cat([d["returns"] for d in all_flat_data])
         merged_old_values = torch.cat([d["old_values"] for d in all_flat_data])
 
+        merged_mcts_policies = None
+        if any("mcts_policies" in d and d["mcts_policies"] is not None for d in all_flat_data):
+            merged_mcts_policies = torch.cat([
+                d["mcts_policies"] for d in all_flat_data if "mcts_policies" in d
+            ])
+
         total_steps = len(merged_actions)
         num_minibatches = max(1, total_steps // minibatch_size)
 
@@ -220,6 +232,11 @@ class EpochRunner:
                 mb_advantages = merged_advantages[mb_indices]
                 mb_returns = merged_returns[mb_indices]
                 mb_old_values = merged_old_values[mb_indices]
+                mb_mcts_policies = (
+                    merged_mcts_policies[mb_indices]
+                    if merged_mcts_policies is not None
+                    else None
+                )
 
                 # Get current entropy coefficient
                 entropy_coeff = None
@@ -237,12 +254,14 @@ class EpochRunner:
                     mb_old_values,
                     entropy_coeff=entropy_coeff,
                     max_grad_norm=max_grad_norm,
+                    mcts_policies=mb_mcts_policies,
+                    epoch=epoch,
                 )
 
                 if result is None:
                     continue
 
-                loss, policy_loss, value_loss, entropy_loss, kl_div = result
+                loss, policy_loss, value_loss, entropy_loss, kl_div, mcts_policy_loss = result
                 epoch_total_loss += loss
                 epoch_policy_loss += policy_loss
                 epoch_value_loss += value_loss
@@ -319,10 +338,10 @@ class EpochRunner:
 
     def _prepare_rollout_data(self, rollouts: List[Dict]) -> List[Dict]:
         """Prepare rollout data for training by moving tensors to DEVICE.
-        
+
         Args:
             rollouts: List of raw rollouts
-            
+
         Returns:
             List of prepared rollout data dictionaries
         """
@@ -338,6 +357,8 @@ class EpochRunner:
             }
             if "step_teams" in rollout:
                 data["step_teams"] = rollout["step_teams"].to(DEVICE)
+            if "mcts_policies" in rollout and rollout["mcts_policies"] is not None:
+                data["mcts_policies"] = rollout["mcts_policies"].to(DEVICE)
             prepared.append(data)
         return prepared
 
@@ -351,9 +372,11 @@ class EpochRunner:
         old_values: torch.Tensor,
         entropy_coeff: Optional[float] = None,
         max_grad_norm: float = 0.5,
+        mcts_policies: Optional[torch.Tensor] = None,
+        epoch: int = 0,
     ) -> Optional[tuple]:
         """Compute losses and perform a single minibatch gradient update.
-        
+
         Args:
             states: List of state dicts for the minibatch
             actions: Minibatch action indices
@@ -363,13 +386,21 @@ class EpochRunner:
             old_values: Old value estimates
             entropy_coeff: Optional dynamic entropy coefficient
             max_grad_norm: Maximum gradient norm for clipping
-            
+            mcts_policies: Optional MCTS visit-count policy [N, NUM_HEROES]
+            epoch: Current epoch number (for value warm-up)
+
         Returns:
-            Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div) or None if failed
+            Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div, mcts_policy_loss) or None if failed
         """
-        self.optimizer.zero_grad()
-        
+        grad_accum_steps = getattr(self.config, "gradient_accumulation_steps", 1)
+        is_accumulation_step = (self.grad_accum_step % grad_accum_steps) != (grad_accum_steps - 1)
+        value_warmup_epochs = getattr(self.config, "value_warmup_epochs", 0)
+
         # Compute losses using loss_computer
+        mcts_policy_weight = getattr(self.config, "mcts_policy_loss_weight", 0.0)
+        if mcts_policies is None or not getattr(self.config, "mcts_use_policy_loss", False):
+            mcts_policy_weight = 0.0
+
         result = self.loss_computer.compute_minibatch(
             states,
             actions,
@@ -378,27 +409,56 @@ class EpochRunner:
             returns,
             old_values,
             entropy_coeff=entropy_coeff,
+            mcts_policies=mcts_policies,
+            mcts_policy_weight=mcts_policy_weight,
         )
-        
+
         if result is None:
             return None
-        
-        loss, policy_loss, value_loss, entropy_loss, kl_div = result
-        
+
+        loss, policy_loss, value_loss, entropy_loss, kl_div, mcts_policy_loss = result
+
+        # Value-only warm-up: first N epochs train only value function
+        is_warmup = epoch < value_warmup_epochs
+        if is_warmup:
+            loss = self.loss_computer.value_loss_coeff * value_loss
+            policy_loss = torch.tensor(0.0, device=loss.device)
+            entropy_loss = torch.tensor(0.0, device=loss.device)
+            kl_div = 0.0
+
+        # Scale loss for gradient accumulation
+        if grad_accum_steps > 1:
+            loss = loss / grad_accum_steps
+
         # Backward pass
         loss.backward()
-        
-        # Gradient clipping
-        if max_grad_norm > 0:
-            torch.nn.utils.clip_grad_norm_(self.agent.parameters(), max_grad_norm)
-        
-        # Optimizer step
-        self.optimizer.step()
-        
+
+        # Optimizer step only on the last accumulation step
+        if not is_accumulation_step:
+            # Separate gradient clipping: value head vs rest of network
+            # This prevents massive value gradients from suppressing policy learning
+            if max_grad_norm > 0:
+                non_value_params = [
+                    p for n, p in self.agent.named_parameters() if not n.startswith("value_head")
+                ]
+                value_params = [
+                    p for n, p in self.agent.named_parameters() if n.startswith("value_head")
+                ]
+                if non_value_params:
+                    torch.nn.utils.clip_grad_norm_(non_value_params, max_grad_norm)
+                if value_params:
+                    torch.nn.utils.clip_grad_norm_(value_params, max_grad_norm * 4)
+
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+        self.grad_accum_step += 1
+
         return (
-            loss.item(),
+            loss.item() * grad_accum_steps,
             policy_loss.item(),
             value_loss.item(),
             entropy_loss.item(),
             kl_div,
+            mcts_policy_loss.item(),
         )

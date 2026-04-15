@@ -95,16 +95,23 @@ class EntropyAnnealer:
 class BPAgentTrainer:
     """Main trainer for BP Agent using PPO."""
 
-    def __init__(self, config_path: Optional[str] = None, **override_kwargs):
+    def __init__(self, config_path: Optional[str] = None, resume_from: Optional[str] = None, **override_kwargs):
         """Initialize trainer.
 
         Args:
             config_path: Path to YAML config file
+            resume_from: Path to checkpoint .pth file to resume training from
             **override_kwargs: Runtime config overrides
         """
         # Load configuration
         self.config = TrainingConfig(config_path)
         self.config.override(**override_kwargs)
+
+        self.resume_from = resume_from
+        self.start_epoch = 0
+        self.start_global_step = 0
+        self.start_grad_accum_step = 0
+        self.log_dir = None
 
         # Initialize components (will be set in setup)
         self.agent = None
@@ -130,21 +137,58 @@ class BPAgentTrainer:
 
         print("[+] Setting up trainer...")
 
-        # Create save directory
+        # Always create new save directory, even when resuming
         self.save_dir = self.config.get_save_dir()
+        if self.resume_from is not None:
+            print(f"[+] Resuming from: {self.resume_from}")
         print(f"[+] Models will be saved to: {self.save_dir}")
 
         # Initialize models
         self.oracle = initialize_oracle(self.config)
         self.agent = initialize_agent(self.config)
+
+        # Resume from checkpoint if provided
+        ckpt_data = None
+        if self.resume_from is not None:
+            ckpt_data = torch.load(self.resume_from, map_location='cpu')
+            if isinstance(ckpt_data, dict) and "agent_state" in ckpt_data:
+                # New-style full checkpoint
+                self.agent.load_state_dict(ckpt_data["agent_state"])
+                self.start_epoch = ckpt_data.get("epoch", 0)
+                self.start_global_step = ckpt_data.get("global_step", 0)
+                self.start_grad_accum_step = ckpt_data.get("grad_accum_step", 0)
+                # Don't reuse log_dir - always create new
+                print(f"[+] Loaded full checkpoint from {self.resume_from}")
+                print(f"[+] Resuming training from epoch {self.start_epoch}, global_step={self.start_global_step}")
+            else:
+                # Old-style checkpoint (agent state_dict only)
+                self.agent.load_state_dict(ckpt_data)
+                print(f"[+] Loaded agent checkpoint from {self.resume_from}")
+                # Parse epoch number from filename (e.g., bp_agent_epoch4.pth -> 4)
+                basename = os.path.basename(self.resume_from)
+                if basename.startswith("bp_agent_epoch") and basename.endswith(".pth"):
+                    try:
+                        self.start_epoch = int(basename[len("bp_agent_epoch"):-len(".pth")])
+                        print(f"[+] Resuming training from epoch {self.start_epoch}")
+                    except ValueError:
+                        self.start_epoch = 0
+
         self.optimizer = initialize_optimizer(self.agent, self.config)
 
         # Initialize data generator
         self.data_generator = DataGenerator(self.config.samples_per_epoch)
 
         # Initialize checkpoint manager
+        # When resuming, include the previous checkpoint directory in the search
+        checkpoint_dirs = list(self.config.checkpoint_dirs)
+        if self.resume_from is not None:
+            prev_ckpt_dir = os.path.dirname(os.path.abspath(self.resume_from))
+            if prev_ckpt_dir not in checkpoint_dirs:
+                checkpoint_dirs.append(prev_ckpt_dir)
+                print(f"[+] Adding previous checkpoint dir to scan: {prev_ckpt_dir}")
+
         self.checkpoint_manager = CheckpointManager(
-            self.config.checkpoint_dirs,
+            checkpoint_dirs,
             embed_dim=self.config.agent_embed_dim,
             nhead=self.config.agent_nhead,
             num_layers=self.config.agent_num_layers,
@@ -152,10 +196,30 @@ class BPAgentTrainer:
         self.checkpoint_manager.discover()
         self.checkpoint_manager.print_summary()
 
+        # Initialize evaluator (must be before rollout collector for rating manager)
+        additional_rating_dirs = []
+        if self.resume_from is not None:
+            prev_ckpt_dir = os.path.dirname(os.path.abspath(self.resume_from))
+            additional_rating_dirs.append(prev_ckpt_dir)
+            print(f"[+] Loading historical ratings from: {prev_ckpt_dir}")
+
+        self.evaluator = EvaluatorManager(
+            self.config, self.oracle, self.save_dir,
+            additional_dirs=additional_rating_dirs if additional_rating_dirs else None
+        )
+
         # Initialize rollout collector
         rating_manager = None
         if hasattr(self.evaluator, 'rating_evaluator') and hasattr(self.evaluator.rating_evaluator, 'rating_manager'):
             rating_manager = self.evaluator.rating_evaluator.rating_manager
+
+        mcts_config = None
+        if getattr(self.config, 'mcts_enabled', False):
+            mcts_config = {
+                "num_simulations": getattr(self.config, 'mcts_num_simulations', 64),
+                "c_puct": getattr(self.config, 'mcts_c_puct', 1.5),
+                "top_k": getattr(self.config, 'mcts_top_k', 20),
+            }
 
         self.rollout_collector = RolloutCollector(
             self.agent,
@@ -168,6 +232,13 @@ class BPAgentTrainer:
             policy_staleness_tolerance=self.config.policy_staleness_tolerance,
             rating_manager=rating_manager,
             num_strata=getattr(self.config, 'num_strata', 3),
+            oracle_embed_dim=self.config.oracle_embed_dim,
+            oracle_nhead=self.config.oracle_nhead,
+            oracle_num_layers=self.config.oracle_num_layers,
+            use_mcts=getattr(self.config, 'mcts_enabled', False),
+            mcts_config=mcts_config,
+            use_parallel=getattr(self.config, 'mcts_enabled', False),
+            num_workers=4,
         )
 
         # Initialize loss computer
@@ -185,6 +256,18 @@ class BPAgentTrainer:
         # Initialize entropy annealer
         self.entropy_annealer = EntropyAnnealer(self.config)
 
+        # Restore optimizer / scheduler / entropy annealer state from full checkpoint
+        if ckpt_data is not None and isinstance(ckpt_data, dict):
+            if "optimizer_state" in ckpt_data:
+                self.optimizer.load_state_dict(ckpt_data["optimizer_state"])
+                print("[+] Restored optimizer state")
+            if "scheduler_state" in ckpt_data and self.scheduler is not None:
+                self.scheduler.load_state_dict(ckpt_data["scheduler_state"])
+                print("[+] Restored scheduler state")
+            if "entropy_step" in ckpt_data and self.entropy_annealer is not None:
+                self.entropy_annealer.current_step = ckpt_data["entropy_step"]
+                print(f"[+] Restored entropy annealer step: {self.entropy_annealer.current_step}")
+
         # Initialize epoch runner
         self.epoch_runner = EpochRunner(
             self.agent,
@@ -194,16 +277,17 @@ class BPAgentTrainer:
             self.checkpoint_manager,
             self.config,
             entropy_annealer=self.entropy_annealer,
+            start_global_step=self.start_global_step,
+            start_grad_accum_step=self.start_grad_accum_step,
         )
 
-        # Initialize evaluator
-        self.evaluator = EvaluatorManager(self.config, self.oracle, self.save_dir)
-
-        # Initialize logger
-        log_dir = self.config.get_log_dir()
+        # Always create new TensorBoard log directory, even when resuming
+        self.log_dir = self.config.get_log_dir()
         self.logger = TensorBoardLogger(
-            log_dir=log_dir, enabled=self.config.use_tensorboard
+            log_dir=self.log_dir, enabled=self.config.use_tensorboard
         )
+        if self.resume_from is not None:
+            print(f"[+] Created new TensorBoard log dir: {self.log_dir}")
 
         print(f"[+] Using {self.evaluator.method_name} rating system for evaluation")
         self._setup_complete = True
@@ -220,7 +304,7 @@ class BPAgentTrainer:
         print(f"[+] Training started for {epochs} epochs...")
 
         # Training loop
-        for epoch in range(epochs):
+        for epoch in range(self.start_epoch, epochs):
             print(f"\n[Epoch {epoch + 1}/{epochs}]")
             # Generate training data for this epoch
             print(f"[+] Generating {self.config.samples_per_epoch} training samples...")
@@ -277,7 +361,17 @@ class BPAgentTrainer:
             # Periodic evaluation
             if self.evaluator.should_evaluate(epoch):
                 print(f"\n[+] Evaluating at epoch {epoch + 1}...")
-                checkpoint_path = save_checkpoint(self.agent, self.save_dir, epoch + 1)
+                checkpoint_path = save_checkpoint(
+                    self.agent,
+                    self.save_dir,
+                    epoch + 1,
+                    optimizer=self.optimizer,
+                    scheduler=self.scheduler,
+                    entropy_annealer=self.entropy_annealer,
+                    global_step=self.epoch_runner.global_step,
+                    grad_accum_step=self.epoch_runner.grad_accum_step,
+                    # Don't save log_dir - we always create new ones when resuming
+                )
                 self.evaluator.evaluate(checkpoint_path, epoch + 1)
 
         # Save final model
@@ -289,13 +383,26 @@ class BPAgentTrainer:
         print("\n[+] Training completed successfully!")
 
     def _save_final_model(self) -> str:
-        """Save final model checkpoint.
+        """Save final model checkpoint with full training state.
 
         Returns:
             Path to saved model
         """
         model_path = f"{self.save_dir}/bp_agent_final.pth"
-        torch.save(self.agent.state_dict(), model_path)
+        checkpoint = {
+            "agent_state": self.agent.state_dict(),
+            "epoch": self.config.epochs,
+            "global_step": self.epoch_runner.global_step,
+            "grad_accum_step": self.epoch_runner.grad_accum_step,
+        }
+        if self.optimizer is not None:
+            checkpoint["optimizer_state"] = self.optimizer.state_dict()
+        if self.scheduler is not None:
+            checkpoint["scheduler_state"] = self.scheduler.state_dict()
+        if self.entropy_annealer is not None:
+            checkpoint["entropy_step"] = self.entropy_annealer.current_step
+        # Don't save log_dir - we always create new ones when resuming
+        torch.save(checkpoint, model_path)
         print(f"[+] Model saved to {model_path}")
         return model_path
 

@@ -3,7 +3,7 @@
 from typing import Dict, List, Tuple, Optional
 import torch
 import torch.nn.functional as F
-from utils.bp_env import compute_gae, ppo_loss, normalize_advantages, compute_value_loss
+from utils.bp_env import ppo_loss, normalize_advantages, compute_value_loss
 from utils.raw_data import NUM_HEROES, get_valid_hero_ids
 from utils.device import DEVICE
 
@@ -113,16 +113,17 @@ class LossComputer:
         final_reward = rewards[-1].item() if rewards.numel() > 0 else 0.0
         mapped_reward = 2.0 * final_reward - 1.0
 
-        # values shape: [T+1], last is bootstrap value
+        # values shape: [T+1], last is bootstrap value (not needed for MC returns)
         step_values = values[:-1]
-        bootstrap_value = values[-1]
 
         T = len(states)
         all_advantages = torch.empty(T, device=DEVICE)
         all_returns = torch.empty(T, device=DEVICE)
         all_old_values = torch.empty(T, device=DEVICE)
 
-        # Compute GAE separately for each team
+        # Use Monte Carlo returns for fixed-horizon deterministic draft (20 steps).
+        # All steps for a team share the same terminal reward target.
+        # No discounting (gamma=1.0) since every step is equally consequential.
         for team_id, team_reward in [(0, mapped_reward), (1, -mapped_reward)]:
             if step_teams is not None and len(step_teams) > 0:
                 team_mask = step_teams == team_id
@@ -134,22 +135,11 @@ class LossComputer:
             if len(team_indices) == 0:
                 continue
 
-            team_rewards = torch.zeros(len(team_indices), device=DEVICE)
-            team_rewards[-1] = team_reward
-            team_dones = torch.zeros(len(team_indices), device=DEVICE)
-            team_dones[-1] = 1.0
-
             team_step_values = step_values[team_mask]
-            team_values = torch.cat([team_step_values, bootstrap_value.unsqueeze(0)])
-
-            advantages, returns = compute_gae(
-                team_rewards.unsqueeze(-1),
-                team_values.unsqueeze(-1),
-                team_dones.unsqueeze(-1),
-                normalize_returns=False,
-            )
-            advantages = advantages.squeeze(-1)
-            returns = returns.squeeze(-1)
+            # MC return = terminal reward for every step of this team
+            returns = torch.full_like(team_step_values, team_reward)
+            # Advantage = return - baseline (old value estimate)
+            advantages = returns - team_step_values
 
             all_advantages[team_indices] = advantages
             all_returns[team_indices] = returns
@@ -161,7 +151,7 @@ class LossComputer:
         old_values_valid = all_old_values[valid_mask]
         states_valid = [states[i] for i in valid_indices.tolist()]
 
-        return {
+        result = {
             "states": states_valid,
             "actions": actions_valid,
             "old_log_probs": old_log_probs_valid,
@@ -169,6 +159,11 @@ class LossComputer:
             "returns": returns_valid,
             "old_values": old_values_valid,
         }
+
+        if "mcts_policies" in rollout_data and rollout_data["mcts_policies"] is not None:
+            result["mcts_policies"] = rollout_data["mcts_policies"][valid_mask]
+
+        return result
 
     def compute_minibatch(
         self,
@@ -179,6 +174,8 @@ class LossComputer:
         returns: torch.Tensor,
         old_values: torch.Tensor,
         entropy_coeff: Optional[float] = None,
+        mcts_policies: Optional[torch.Tensor] = None,
+        mcts_policy_weight: float = 0.0,
     ) -> Optional[tuple]:
         """Compute losses for a minibatch of flattened data.
 
@@ -190,9 +187,11 @@ class LossComputer:
             returns: [N] returns
             old_values: [N] old value estimates
             entropy_coeff: Dynamic entropy coefficient
+            mcts_policies: [N, NUM_HEROES] MCTS visit-count policy (optional)
+            mcts_policy_weight: Weight for MCTS policy loss vs PPO policy loss
 
         Returns:
-            Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div)
+            Tuple of (loss, policy_loss, value_loss, entropy_loss, kl_div, mcts_policy_loss)
         """
         if len(actions) == 0:
             return None
@@ -200,7 +199,7 @@ class LossComputer:
         # Normalize advantages over the minibatch (standard PPO)
         advantages = normalize_advantages(advantages)
 
-        new_log_probs, new_values, entropies = self._compute_policy_outputs_optimized(
+        new_log_probs, new_values, entropies, full_logits = self._compute_policy_outputs_optimized(
             states, actions
         )
 
@@ -215,19 +214,31 @@ class LossComputer:
             use_clipping=True,
         )
 
+        # MCTS policy loss (AlphaZero-style cross-entropy)
+        mcts_policy_loss = torch.tensor(0.0, device=DEVICE)
+        if mcts_policies is not None and mcts_policy_weight > 0:
+            log_probs_all = torch.log_softmax(full_logits, dim=-1)
+            mcts_policy_loss = -(mcts_policies * log_probs_all).sum(dim=-1).mean()
+            effective_policy_loss = (
+                (1 - mcts_policy_weight) * policy_loss
+                + mcts_policy_weight * mcts_policy_loss
+            )
+        else:
+            effective_policy_loss = policy_loss
+
         kl_div = compute_kl_divergence(new_log_probs, old_log_probs)
         entropy_loss = -entropies.mean()
 
         coeff = entropy_coeff if entropy_coeff is not None else self.entropy_loss_coeff
-        loss = policy_loss + self.value_loss_coeff * value_loss + coeff * entropy_loss
+        loss = effective_policy_loss + self.value_loss_coeff * value_loss + coeff * entropy_loss
 
-        return loss, policy_loss, value_loss, entropy_loss, kl_div
+        return loss, policy_loss, value_loss, entropy_loss, kl_div, mcts_policy_loss
 
     def _compute_policy_outputs_optimized(
         self, states: List[Dict], actions: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """优化版本：按history长度分组，组内batch处理。
-        
+
         核心优化：相同history长度的states可以安全地组成batch进行单次前向传播，
         避免了为不同长度进行复杂padding的问题。
 
@@ -236,11 +247,12 @@ class LossComputer:
             actions: [N] action indices corresponding to states
 
         Returns:
-            Tuple of (new_log_probs, new_values, entropies)
+            Tuple of (new_log_probs, new_values, entropies, full_logits)
         """
         num_steps = len(states)
         if num_steps == 0:
             return (
+                torch.tensor([], device=DEVICE),
                 torch.tensor([], device=DEVICE),
                 torch.tensor([], device=DEVICE),
                 torch.tensor([], device=DEVICE),
@@ -258,46 +270,46 @@ class LossComputer:
         all_new_log_probs = [None] * num_steps
         all_new_values = [None] * num_steps
         all_entropies = [None] * num_steps
+        all_logits = [None] * num_steps
 
         # 对每个组进行batch处理
         for hist_len, action_indices in groups.items():
             group_states = [states[i] for i in action_indices]
-            
+
             # 打包成batch
             batch_state = self._pack_states(group_states)
-            
+
             # 单次前向传播（需要梯度，用于反向传播）
             batch_logits, batch_values = self.agent(batch_state)
-            
+
             # 批量构建mask并处理
             batch_mask = self._build_batch_action_mask(group_states)
             batch_logits = batch_logits + batch_mask
-            
-            # 应用策略温度（如果 agent 支持），使 temperature 参与梯度计算
-            temp = self.agent.get_temperature() if hasattr(self.agent, 'get_temperature') else 1.0
-            batch_logits_temp = batch_logits / temp
-            
-            # 批量计算概率和entropy（基于带温度的分布）
-            batch_probs = torch.softmax(batch_logits_temp, dim=-1)
-            batch_log_probs = torch.log_softmax(batch_logits_temp, dim=-1)
-            
+
+            # PPO 的 log_prob 计算应基于目标策略（temperature=1.0），
+            # 保证 old_log_prob 和 new_log_prob 在同一分布下计算 ratio
+            batch_probs = torch.softmax(batch_logits, dim=-1)
+            batch_log_probs = torch.log_softmax(batch_logits, dim=-1)
+
             # 获取对应动作的log_prob
             group_actions = actions[action_indices]
             group_new_log_probs = batch_log_probs.gather(1, group_actions.unsqueeze(1)).squeeze(1)
             group_entropies = -(batch_probs * batch_log_probs).sum(dim=-1)
-            
+
             # 保存结果
             for i, action_idx in enumerate(action_indices):
                 all_new_log_probs[action_idx] = group_new_log_probs[i]
                 all_new_values[action_idx] = batch_values[i].squeeze(-1)
                 all_entropies[action_idx] = group_entropies[i]
+                all_logits[action_idx] = batch_logits[i]
 
         # 堆叠成tensor
         new_log_probs = torch.stack(all_new_log_probs)
         new_values = torch.stack(all_new_values)
         entropies = torch.stack(all_entropies)
+        full_logits = torch.stack(all_logits)
 
-        return new_log_probs, new_values, entropies
+        return new_log_probs, new_values, entropies, full_logits
 
     def _pack_states(self, states: List[Dict]) -> Dict:
         """将相同history长度的states列表打包成batch。
@@ -353,7 +365,7 @@ class LossComputer:
             # 从state中获取已使用的英雄
             if state["action_history"]["heroes"].numel() > 0:
                 # 获取这个state中所有已使用的英雄（包括pick和ban）
-                heroes = state["action_history"]["heroes"].squeeze(0)  # [T]
+                heroes = state["action_history"]["heroes"].flatten()  # [T]
                 for h in heroes:
                     h_id = h.item()
                     if h_id < NUM_HEROES:

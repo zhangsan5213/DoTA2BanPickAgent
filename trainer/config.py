@@ -40,6 +40,7 @@ class TrainingConfig:
         # Training config
         training_cfg = cfg.get("training", {})
         self.epochs = training_cfg.get("epochs", 32)
+        self.value_warmup_epochs = training_cfg.get("value_warmup_epochs", 0)
         self.batch_size = training_cfg.get("batch_size", 16)
         self.gradient_accumulation_steps = training_cfg.get("gradient_accumulation_steps", 1)
         # effective_batch_size = batch_size * gradient_accumulation_steps
@@ -84,6 +85,15 @@ class TrainingConfig:
         self.kl_adaptive_learning_rate = bool(ppo_cfg.get("kl_adaptive_learning_rate", False))
         self.kl_lr_decay_factor = float(ppo_cfg.get("kl_lr_decay_factor", 0.5))
         self.kl_violation_ratio_threshold = float(ppo_cfg.get("kl_violation_ratio_threshold", 0.8))
+
+        # MCTS config
+        mcts_cfg = cfg.get("mcts", {})
+        self.mcts_enabled = mcts_cfg.get("enabled", False)
+        self.mcts_num_simulations = mcts_cfg.get("num_simulations", 64)
+        self.mcts_c_puct = float(mcts_cfg.get("c_puct", 1.5))
+        self.mcts_top_k = mcts_cfg.get("top_k", 20)
+        self.mcts_policy_loss_weight = float(mcts_cfg.get("policy_loss_weight", 1.0))
+        self.mcts_use_policy_loss = bool(mcts_cfg.get("use_mcts_policy_loss", False))
 
         # Oracle config
         self.oracle_path = cfg.get(

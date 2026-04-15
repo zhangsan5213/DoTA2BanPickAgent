@@ -3,7 +3,7 @@
 import os
 import random
 from typing import List, Dict, Any, Optional
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import torch
 import torch.multiprocessing as mp
 
@@ -46,6 +46,8 @@ def _collect_rollout_worker(args: tuple) -> Dict[str, Any]:
         opponent_state_dict,
         current_side,
         temperature,
+        use_mcts,
+        mcts_config,
     ) = args
     
     # Set device to CPU in worker processes (avoid GPU memory conflicts)
@@ -91,6 +93,8 @@ def _collect_rollout_worker(args: tuple) -> Dict[str, Any]:
         opponent_agent=opponent,
         current_side=current_side,
         temperature=temperature,
+        use_mcts=use_mcts,
+        mcts_config=mcts_config,
     )
     
     return rollout
@@ -118,6 +122,8 @@ class RolloutCollector:
         policy_staleness_tolerance: int = 2,
         rating_manager = None,
         num_strata: int = 3,
+        use_mcts: bool = False,
+        mcts_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Args:
@@ -139,6 +145,8 @@ class RolloutCollector:
                 contribute training data for their opponent steps as well.
             rating_manager: Optional TrueSkillRatingManager for stratified opponent sampling.
             num_strata: Number of rating strata for stratified sampling.
+            use_mcts: Whether to use MCTS for training rollouts.
+            mcts_config: Dict with MCTS hyperparameters (c_puct, num_simulations, top_k).
         """
         self.agent = agent
         self.oracle = oracle
@@ -150,11 +158,13 @@ class RolloutCollector:
         self.policy_staleness_tolerance = policy_staleness_tolerance
         self.rating_manager = rating_manager
         self.num_strata = num_strata
-        
+        self.use_mcts = use_mcts
+        self.mcts_config = mcts_config or {}
+
         # Parallel configuration
         self.use_parallel = use_parallel
         self.num_workers = num_workers
-        
+
         # Oracle configuration for worker reconstruction
         self.oracle_config = {
             "embed_dim": oracle_embed_dim,
@@ -163,7 +173,7 @@ class RolloutCollector:
             "use_text": oracle_use_text,
             "use_player_heroes": oracle_use_player_heroes,
         }
-        
+
         # Agent configuration for worker reconstruction
         self.agent_config = {
             "embed_dim": embed_dim,
@@ -190,6 +200,10 @@ class RolloutCollector:
             List of rollouts
         """
         if self.use_parallel and len(batch_samples) > 1:
+            if self.use_mcts:
+                return self._collect_batch_threaded(
+                    batch_samples, checkpoints, checkpoint_manager, batch_idx
+                )
             return self._collect_batch_parallel(
                 batch_samples, checkpoints, checkpoint_manager, batch_idx
             )
@@ -225,7 +239,9 @@ class RolloutCollector:
             sample = batch_samples[i]
             rollouts.append(collect_rollout(
                 self.agent, self.oracle, sample,
-                temperature=self.temperature
+                temperature=self.temperature,
+                use_mcts=self.use_mcts,
+                mcts_config=self.mcts_config,
             ))
 
         return rollouts
@@ -278,6 +294,8 @@ class RolloutCollector:
                     None,  # opponent_state_dict
                     "radiant",  # current_side (self-play)
                     self.temperature,
+                    self.use_mcts,
+                    self.mcts_config,
                 ))
 
             # Execute in parallel using ProcessPoolExecutor
@@ -302,7 +320,9 @@ class RolloutCollector:
                             sample = batch_samples[sample_idx]
                             rollout = collect_rollout(
                                 self.agent, self.oracle, sample,
-                                temperature=self.temperature
+                                temperature=self.temperature,
+                                use_mcts=self.use_mcts,
+                                mcts_config=self.mcts_config,
                             )
                             rollouts.append((sample_idx, rollout))
             except Exception as e:
@@ -314,11 +334,105 @@ class RolloutCollector:
                         sample = batch_samples[i]
                         rollout = collect_rollout(
                             self.agent, self.oracle, sample,
-                            temperature=self.temperature
+                            temperature=self.temperature,
+                            use_mcts=self.use_mcts,
+                            mcts_config=self.mcts_config,
                         )
                         rollouts.append((i, rollout))
 
         # Sort by original index to maintain order
+        rollouts.sort(key=lambda x: x[0])
+        return [r for _, r in rollouts]
+
+    def _collect_batch_threaded(
+        self,
+        batch_samples: List[Dict[str, Any]],
+        checkpoints: List,
+        checkpoint_manager,
+        batch_idx: int
+    ) -> List[Dict[str, Any]]:
+        """Thread-based parallel rollout collection for MCTS (keeps models on GPU).
+
+        Uses ThreadPoolExecutor so the agent/oracle stay on CUDA and multiple
+        MCTS searches can overlap their forward passes on the GPU.
+        """
+        batch_size = len(batch_samples)
+        num_hist = int(batch_size * self.historical_prob)
+
+        rollouts = []
+
+        # Historical opponent rollouts - keep sequential for LRU cache efficiency
+        if num_hist > 0 and checkpoints:
+            hist_assignments = self._assign_historical_opponents(
+                num_hist, checkpoints
+            )
+            hist_rollouts = self._collect_historical_rollouts(
+                hist_assignments, batch_samples, checkpoints, checkpoint_manager
+            )
+            for (sample_idx, _), rollout in zip(hist_assignments, hist_rollouts):
+                rollouts.append((sample_idx, rollout))
+
+        # Self-play rollouts - parallelize with threads (GPU-safe)
+        if num_hist < batch_size:
+            worker_args = []
+            for i in range(num_hist, batch_size):
+                sample = batch_samples[i]
+                worker_args.append((
+                    sample,
+                    self.agent,
+                    self.oracle,
+                    self.temperature,
+                    self.use_mcts,
+                    self.mcts_config,
+                ))
+
+            def _thread_worker(args):
+                sample, agent, oracle, temperature, use_mcts, mcts_config = args
+                return collect_rollout(
+                    agent, oracle, sample,
+                    temperature=temperature,
+                    use_mcts=use_mcts,
+                    mcts_config=mcts_config,
+                )
+
+            try:
+                with ThreadPoolExecutor(
+                    max_workers=min(self.num_workers, len(worker_args))
+                ) as executor:
+                    futures = {
+                        executor.submit(_thread_worker, args): idx + num_hist
+                        for idx, args in enumerate(worker_args)
+                    }
+
+                    for future in as_completed(futures):
+                        sample_idx = futures[future]
+                        try:
+                            rollout = future.result(timeout=300)
+                            rollouts.append((sample_idx, rollout))
+                        except Exception as e:
+                            print(f"[RolloutCollector] Thread failed for sample {sample_idx}: {e}")
+                            sample = batch_samples[sample_idx]
+                            rollout = collect_rollout(
+                                self.agent, self.oracle, sample,
+                                temperature=self.temperature,
+                                use_mcts=self.use_mcts,
+                                mcts_config=self.mcts_config,
+                            )
+                            rollouts.append((sample_idx, rollout))
+            except Exception as e:
+                print(f"[RolloutCollector] Threaded execution failed: {e}")
+                print("[RolloutCollector] Falling back to sequential collection for remaining samples")
+                for i in range(num_hist, batch_size):
+                    if not any(idx == i for idx, _ in rollouts):
+                        sample = batch_samples[i]
+                        rollout = collect_rollout(
+                            self.agent, self.oracle, sample,
+                            temperature=self.temperature,
+                            use_mcts=self.use_mcts,
+                            mcts_config=self.mcts_config,
+                        )
+                        rollouts.append((i, rollout))
+
         rollouts.sort(key=lambda x: x[0])
         return [r for _, r in rollouts]
 
@@ -408,7 +522,9 @@ class RolloutCollector:
                 for sample_idx, _ in sample_list:
                     rollouts.append(collect_rollout(
                         self.agent, self.oracle, batch_samples[sample_idx],
-                        temperature=self.temperature
+                        temperature=self.temperature,
+                        use_mcts=self.use_mcts,
+                        mcts_config=self.mcts_config,
                     ))
                 continue
 
@@ -421,6 +537,8 @@ class RolloutCollector:
                     temperature=self.temperature,
                     policy_staleness_tolerance=self.policy_staleness_tolerance,
                     opponent_staleness=ckpt_idx,
+                    use_mcts=self.use_mcts,
+                    mcts_config=self.mcts_config,
                 )
                 rollouts.append(rollout)
 
@@ -447,4 +565,6 @@ class RolloutCollector:
             "historical_prob": self.historical_prob,
             "agent_config": self.agent_config,
             "oracle_config": self.oracle_config,
+            "use_mcts": self.use_mcts,
+            "mcts_config": self.mcts_config,
         }

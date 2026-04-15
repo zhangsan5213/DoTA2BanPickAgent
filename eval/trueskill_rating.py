@@ -847,10 +847,11 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
         num_player_sets: int = NUM_PLAYER_SETS,
         staleness_threshold: int = 5,
         num_active_models: int = 5,
+        additional_dirs: Optional[List[str]] = None,
     ):
         super().__init__(save_dir, num_opponents, num_player_sets)
 
-        self.rating_manager = TrueSkillRatingManager(save_dir=save_dir)
+        self.rating_manager = TrueSkillRatingManager(save_dir=save_dir, additional_dirs=additional_dirs)
         self.battle_simulator = BPBattleSimulator(
             oracle=oracle, oracle_path=oracle_path
         )

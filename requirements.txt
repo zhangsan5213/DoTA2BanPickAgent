@@ -1,0 +1,31 @@
+# PyTorch GPU wheels (CUDA 12.1)
+# If your CUDA version differs, replace cu121 with cu118/cu124/etc.
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Core ML
+torch>=2.0.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Logging
+tensorboard>=2.13.0
+
+# HTTP requests (data fetching)
+requests>=2.31.0
+
+# Rating system
+trueskill>=0.4.5
+
+# Sentence embeddings for hero semantic features
+sentence-transformers>=2.2.0
+
+# Configuration parsing
+pyyaml>=6.0.1
+
+# Excel file I/O
+openpyxl>=3.1.0

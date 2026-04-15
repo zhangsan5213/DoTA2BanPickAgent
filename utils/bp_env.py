@@ -100,6 +100,28 @@ class BPState:
             return action_type
         return "pick"  # 默认pick
 
+    def copy(self):
+        """深拷贝当前状态（用于MCTS搜索树扩展）"""
+        new_state = BPState(
+            list(self.radiant_heroes),
+            list(self.dire_heroes),
+            self.radiant_players,
+            self.dire_players,
+            list(self.radiant_bans),
+            list(self.dire_bans),
+            self.is_radiant_turn,
+            self.step_idx,
+        )
+        new_state.history = {
+            "teams": list(self.history["teams"]),
+            "actions": list(self.history["actions"]),
+            "heroes": list(self.history["heroes"]),
+        }
+        new_state.done = self.done
+        new_state.pick_count = dict(self.pick_count)
+        new_state.ban_count = dict(self.ban_count)
+        return new_state
+
     def to_dict(self, device=DEVICE):
         # Handle both list and tensor inputs
         if not isinstance(self.radiant_players, torch.Tensor):
@@ -204,7 +226,7 @@ class BPState:
 
 
 # ============ RL Helpers ============
-GAMMA = 0.99
+GAMMA = 1.0
 LAMBDA = 0.95
 CLIP_EPS = 0.2
 VALUE_CLIP_EPS = 0.2  # Value clipping epsilon
@@ -276,19 +298,16 @@ def compute_value_loss(
     PPO Value Loss with optional clipping
 
     Args:
-        new_values: 当前value network预测值 [T]
-        old_values: 收集trajectory时的value预测值 [T+1] (包含bootstrap)
-        returns: GAE计算的returns [T]
+        new_values: 当前value network预测值 [N]
+        old_values: 收集trajectory时的value预测值 [N] (已与 returns 对齐，不含bootstrap)
+        returns: GAE计算的returns [N]
         clip_eps: value clipping系数
         use_clipping: 是否使用clipping
 
     Returns:
         value_loss: scalar
     """
-    # 注意: old_values长度是T+1，需要截断到T
-    old_values_clipped = (
-        old_values[:-1] if old_values.shape[0] > returns.shape[0] else old_values
-    )
+    old_values_clipped = old_values
 
     if use_clipping:
         # PPO-style value clipping: 限制value update幅度
@@ -310,7 +329,8 @@ def compute_value_loss(
 
 def collect_rollout(
     agent, oracle, sample, max_steps=24, opponent_agent=None, current_side="radiant",
-    temperature=None, policy_staleness_tolerance=0, opponent_staleness=None
+    temperature=None, policy_staleness_tolerance=0, opponent_staleness=None,
+    use_mcts=False, mcts_config=None
 ):
     """Collect one BP trajectory.
 
@@ -325,6 +345,8 @@ def collect_rollout(
             Only relevant when opponent_agent is not None.
         temperature: Action sampling temperature. If None, uses agent's internal temperature.
             High temperature -> more exploration; low temperature -> more exploitation.
+        use_mcts: Whether to use MCTS for the current agent's actions.
+        mcts_config: Dict with MCTS hyperparameters (c_puct, num_simulations, top_k).
     """
     # 从agent获取设备信息
     device = next(agent.parameters()).device
@@ -342,7 +364,13 @@ def collect_rollout(
         step_idx=0,
     )
 
-    states, actions, log_probs, values, rewards, valid_mask, step_teams = (
+    # 初始化MCTS（仅在需要时）
+    mcts = None
+    if use_mcts:
+        from search.mcts_draft import DraftMCTS
+        mcts = DraftMCTS(agent, oracle, **(mcts_config or {}))
+
+    states, actions, log_probs, values, rewards, valid_mask, step_teams, mcts_policies = (
         [],
         [],
         [],
@@ -350,6 +378,7 @@ def collect_rollout(
         [],
         [],
         [],  # 记录每一步是哪个team执行的: 0=Radiant, 1=Dire
+        [],  # MCTS visit-count policy
     )
     step = 0
 
@@ -358,7 +387,7 @@ def collect_rollout(
 
         is_radiant_turn = s.is_radiant_turn
         current_team = 0 if is_radiant_turn else 1  # 0=Radiant, 1=Dire
-        
+
         if opponent_agent is not None:
             if is_radiant_turn:
                 active_agent = agent if current_side == "radiant" else opponent_agent
@@ -384,19 +413,6 @@ def collect_rollout(
                 mask[h - 1] = -1e9
         action_logits = action_logits + mask
 
-        # 获取采样温度（可学习参数或固定超参数）
-        if temperature is None and hasattr(active_agent, 'get_temperature'):
-            temp = active_agent.get_temperature().item()
-        else:
-            temp = temperature if temperature is not None else 1.0
-
-        # 带温度概率：用于实际动作采样和 old_log_prob 记录
-        # PPO 端到端学习 temperature，因此 loss 计算也基于此分布
-        probs = F.softmax(action_logits / temp, dim=-1)
-        dist = torch.distributions.Categorical(probs)
-        hero_id = dist.sample().item() + 1
-        log_prob = dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
-
         # Mark whether this step belongs to the current agent
         if opponent_agent is None:
             is_current = True  # 自对弈：所有步骤都用于训练
@@ -411,12 +427,43 @@ def collect_rollout(
                 if opponent_staleness <= policy_staleness_tolerance:
                     is_current = True
 
+        # 动作选择：MCTS（当前agent）或策略采样
+        mcts_policy_tensor = None
+        if use_mcts and is_current and mcts is not None:
+            hero_id, mcts_policy = mcts.search(s)
+            # 将MCTS策略dict转换为[NUM_HEROES]概率张量
+            mcts_policy_tensor = torch.zeros(NUM_HEROES, device=device)
+            for h, p in mcts_policy.items():
+                mcts_policy_tensor[h - 1] = p
+
+            # old_log_prob 基于目标策略（temperature=1.0）
+            target_probs = F.softmax(action_logits, dim=-1)
+            target_dist = torch.distributions.Categorical(target_probs)
+            log_prob = target_dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
+        else:
+            # 获取采样温度（可学习参数或固定超参数）
+            if temperature is None and hasattr(active_agent, 'get_temperature'):
+                temp = active_agent.get_temperature().item()
+            else:
+                temp = temperature if temperature is not None else 1.0
+
+            # 采样使用带温度分布（ exploration ）
+            sample_probs = F.softmax(action_logits / temp, dim=-1)
+            sample_dist = torch.distributions.Categorical(sample_probs)
+            hero_id = sample_dist.sample().item() + 1
+
+            # old_log_prob 必须基于目标策略（temperature=1.0），保证 PPO ratio 一致
+            target_probs = F.softmax(action_logits, dim=-1)
+            target_dist = torch.distributions.Categorical(target_probs)
+            log_prob = target_dist.log_prob(torch.tensor(hero_id - 1, device=action_logits.device))
+
         states.append(state_dict)
         actions.append(hero_id - 1)
         log_probs.append(log_prob)
         values.append(value.item())
         valid_mask.append(is_current)
         step_teams.append(current_team)  # 记录这一步是哪个team
+        mcts_policies.append(mcts_policy_tensor)
 
         s.step(hero_id)
         step += 1
@@ -451,6 +498,15 @@ def collect_rollout(
         _, final_value = final_active_agent(final_state_dict)
     final_value = final_value.item()
 
+    # 处理 mcts_policies：将 None 替换为零向量，保证可以 stack
+    mcts_policies_stacked = None
+    if any(p is not None for p in mcts_policies):
+        processed = [
+            p if p is not None else torch.zeros(NUM_HEROES, device=device)
+            for p in mcts_policies
+        ]
+        mcts_policies_stacked = torch.stack(processed)
+
     return {
         "states": states,
         "actions": torch.tensor(actions, dtype=torch.long),
@@ -459,6 +515,7 @@ def collect_rollout(
         "rewards": torch.tensor(rewards, dtype=torch.float32),
         "valid_mask": torch.tensor(valid_mask, dtype=torch.bool),
         "step_teams": step_teams_tensor,  # 每一步的执行者: 0=Radiant, 1=Dire
+        "mcts_policies": mcts_policies_stacked,
     }
 
 

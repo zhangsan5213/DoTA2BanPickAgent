@@ -1,7 +1,7 @@
 # BP Agent Training Configuration (GITCGRL-inspired)
 
 # Training hyperparameters
-actor_lr: 4e-5
+actor_lr: 2e-4
 
 # Policy temperature (GITCGRL-inspired exploration control)
 # High temperature -> more random exploration during rollouts
@@ -12,22 +12,22 @@ agent_temperature: 1.0
 agent_learnable_temperature: false
 
 # Loss coefficients
-value_loss_coeff: 1.6
+value_loss_coeff: 0.5
 entropy_loss_coeff: 0.03
 
 # Entropy 退火配置
 entropy_annealing:
-  enabled: false           # 默认禁用，向后兼容
+  enabled: true            # 启用熵退火，让策略从探索转向利用
   initial_coeff: 0.03      # 初始熵系数
-  final_coeff: 0.01       # 最终熵系数
+  final_coeff: 0.005       # 最终熵系数（更低，鼓励利用）
   type: "linear"           # 可选: linear, exponential, cosine
-  
+
   # 按epoch退火参数
   total_epochs: 32         # 退火总epoch数（通常等于训练epochs）
-  
+
   # 按步数退火参数（优先于epoch）
-  warmup_steps: 1000       # 前N步保持initial_coeff
-  annealing_steps: 10000   # 退火步数
+  warmup_steps: 500        # 前N步保持initial_coeff
+  annealing_steps: 8000    # 退火步数
 
 # TensorBoard
 tensorboard_log_prefix: "bp_agent_exp_"
@@ -64,7 +64,7 @@ ppo:
   value_clip_ratio: 1.0       # Value function clip epsilon (effectively disabled for [-1,1] returns)
   
   # PPO Epoch Loop (关键改进：复用数据多次更新)
-  ppo_epochs: 4               # 每批rollout训练几轮PPO (GITCGRL: 4-16)
+  ppo_epochs: 3               # 每批rollout训练几轮PPO (降低以避免过优化)
   
   # Minibatch size for PPO updates (standard PPO uses 64-512)
   minibatch_size: 64
@@ -79,8 +79,17 @@ ppo:
   
   # 自适应学习率（保持禁用）
   kl_adaptive_learning_rate: false
-  kl_lr_decay_factor: 0.5     
+  kl_lr_decay_factor: 0.5
   kl_violation_ratio_threshold: 0.8
+
+# MCTS Configuration (lightweight search for training rollouts)
+mcts:
+  enabled: true               # 训练中启用MCTS生成更高质量rollout
+  num_simulations: 8          # 训练时每步模拟次数（降低以换取速度）
+  c_puct: 1.5                 # UCB探索系数
+  top_k: 8                    # 策略裁剪：只保留top-k动作分支（降低分支数）
+  policy_loss_weight: 1.0     # MCTS策略损失权重（与PPO损失混合）
+  use_mcts_policy_loss: false # 是否将MCTS visit分布作为辅助损失目标
 
 # 学习率调度配置
 lr_scheduler:
@@ -112,10 +121,11 @@ lr_scheduler:
 # Training defaults (used in __main__)
 training:
   epochs: 32
-  batch_size: 64  # each batch, all samples are used for rollouts
+  value_warmup_epochs: 1          # 前N个epoch只训练value head，让value function先学会预测
+  batch_size: 64                  # each batch, all samples are used for rollouts
   gradient_accumulation_steps: 8  # 梯度累积步数
   effective_batch_size: 512       # batch_size * accumulation_steps
-  samples_per_epoch: 4096         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
+  samples_per_epoch: 1024         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
   use_tensorboard: true
   historical_opponent_prob: 0.3   # 30% vs 历史模型 (GITCGRL style)
   policy_staleness_tolerance: 2   # 最近N个历史ckpt的对手数据也参与训练

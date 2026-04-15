@@ -37,15 +37,17 @@ class ModelRatingRecord:
 class RatingManagerBase(ABC):
     """评分管理器抽象基类"""
     
-    def __init__(self, save_dir: str = "./ckpts/bp_agent"):
+    def __init__(self, save_dir: str = "./ckpts/bp_agent", additional_dirs: Optional[List[str]] = None):
         """
         初始化评分管理器
-        
+
         Args:
-            save_dir: 模型保存目录
+            save_dir: 模型保存目录 (primary directory for saving new records)
+            additional_dirs: Additional directories to load records from (for resuming)
         """
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.additional_dirs = [Path(d) for d in additional_dirs] if additional_dirs else []
         self.db_path = self._get_db_path()
         self.records: Dict[str, ModelRatingRecord] = {}
         self._load_records()
@@ -61,16 +63,31 @@ class RatingManagerBase(ABC):
         pass
     
     def _load_records(self):
-        """加载评分记录"""
+        """加载评分记录 - from primary dir and all additional dirs"""
+        self.records = {}
+
+        # Load from additional directories first (older records)
+        for add_dir in self.additional_dirs:
+            add_db_path = add_dir / self.db_path.name
+            if add_db_path.exists():
+                try:
+                    with open(add_db_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        for path, record in data.items():
+                            if path not in self.records:
+                                self.records[path] = self._record_from_dict(record)
+                except Exception as e:
+                    print(f"[!] Warning: Could not load records from {add_db_path}: {e}")
+
+        # Load from primary directory (newest records, will overwrite if conflict)
         if self.db_path.exists():
-            with open(self.db_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.records = {
-                    path: self._record_from_dict(record)
-                    for path, record in data.items()
-                }
-        else:
-            self.records = {}
+            try:
+                with open(self.db_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for path, record in data.items():
+                        self.records[path] = self._record_from_dict(record)
+            except Exception as e:
+                print(f"[!] Warning: Could not load records from {self.db_path}: {e}")
     
     def _save_records(self):
         """保存评分记录"""

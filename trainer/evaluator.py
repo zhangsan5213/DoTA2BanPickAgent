@@ -1,7 +1,7 @@
 """Evaluation management."""
 
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import torch
 
 from eval import EvalMethod, get_evaluator, RatingEvaluatorBase
@@ -11,12 +11,13 @@ from model.win_rate_oracle import WinRateOracle
 class EvaluatorManager:
     """Manages model evaluation during training."""
 
-    def __init__(self, config, oracle: WinRateOracle, save_dir: str):
+    def __init__(self, config, oracle: WinRateOracle, save_dir: str, additional_dirs: Optional[List[str]] = None):
         """
         Args:
             config: TrainingConfig instance
             oracle: Win rate oracle model
             save_dir: Directory to save checkpoints
+            additional_dirs: Additional directories to load historical records from
         """
         self.config = config
         self.oracle = oracle
@@ -53,6 +54,7 @@ class EvaluatorManager:
                 {
                     "staleness_threshold": config.ts_staleness_threshold,
                     "num_active_models": config.ts_num_active_models,
+                    "additional_dirs": additional_dirs,
                 }
             )
 
@@ -99,9 +101,9 @@ class EvaluatorManager:
 
         # Log evaluation details
         if "results" in eval_result:
-            num_battles = len(eval_result["results"])
+            num_battles = sum(len(r.get("battle_results", [])) for r in eval_result["results"])
             total_win_rate = sum(r["win_rate"] for r in eval_result["results"])
-            avg_win_rate = total_win_rate / num_battles if num_battles > 0 else 0
+            avg_win_rate = total_win_rate / len(eval_result["results"]) if eval_result["results"] else 0
 
             print(f"\n[+] Evaluation summary:")
             print(f"[+] Number of battles: {num_battles}")
@@ -189,18 +191,49 @@ class EvaluatorManager:
         self.rating_evaluator.print_leaderboard()
 
 
-def save_checkpoint(agent, save_dir: str, epoch: int) -> str:
-    """Save model checkpoint.
+def save_checkpoint(
+    agent,
+    save_dir: str,
+    epoch: int,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[Any] = None,
+    entropy_annealer: Optional[Any] = None,
+    global_step: int = 0,
+    grad_accum_step: int = 0,
+    log_dir: Optional[str] = None,
+) -> str:
+    """Save full training checkpoint.
 
     Args:
         agent: Agent model
         save_dir: Directory to save checkpoint
         epoch: Current epoch number
+        optimizer: Optional optimizer state
+        scheduler: Optional scheduler state
+        entropy_annealer: Optional entropy annealer state
+        global_step: Current global training step for TensorBoard continuity
+        grad_accum_step: Current gradient accumulation step
+        log_dir: TensorBoard log directory
 
     Returns:
         Path to saved checkpoint
     """
+    checkpoint = {
+        "agent_state": agent.state_dict(),
+        "epoch": epoch,
+        "global_step": global_step,
+        "grad_accum_step": grad_accum_step,
+    }
+    if optimizer is not None:
+        checkpoint["optimizer_state"] = optimizer.state_dict()
+    if scheduler is not None:
+        checkpoint["scheduler_state"] = scheduler.state_dict()
+    if entropy_annealer is not None:
+        checkpoint["entropy_step"] = entropy_annealer.current_step
+    if log_dir is not None:
+        checkpoint["log_dir"] = log_dir
+
     checkpoint_path = f"{save_dir}/bp_agent_epoch{epoch}.pth"
-    torch.save(agent.state_dict(), checkpoint_path)
+    torch.save(checkpoint, checkpoint_path)
     print(f"[+] Checkpoint saved: {checkpoint_path}")
     return checkpoint_path

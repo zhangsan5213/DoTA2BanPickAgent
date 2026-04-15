@@ -6,7 +6,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import torch
 import torch.nn as nn
-from utils.raw_data import NUM_HEROES, HERO_ID_FEATURE_MAP, NUM_HERO_FEATURES
+from model.hero_encoder import MultiModalHeroEncoder
+from utils.raw_data import NUM_HEROES, HERO_ID_FEATURE_MAP, NUM_HERO_FEATURES, HERO_ID_SEMANTIC_MAP
 
 ACTOR_DIM = 8
 ACTION_DIM = 8
@@ -25,6 +26,9 @@ def init_weights(module):
         # 为 value head 使用 Xavier 初始化
         if hasattr(module, "_is_value_head") or "value" in str(module):
             nn.init.xavier_uniform_(module.weight)
+        elif hasattr(module, "_is_policy_head"):
+            # policy head 使用更大的 gain，让初始 logits 有更大方差，避免卡在均匀分布
+            nn.init.orthogonal_(module.weight, gain=0.1)
         else:
             nn.init.orthogonal_(module.weight, gain=0.01)
         if module.bias is not None:
@@ -45,24 +49,22 @@ def init_embedding(module):
 
 
 class ActionEncoder(nn.Module):
-    """Encode BP actions: (actor_team, action_type, target_hero)"""
+    """Encode BP actions: (actor_team, action_type, target_hero_emb)"""
 
     def __init__(self, embed_dim=EMBED_DIM):
         super().__init__()
         self.team_embed = nn.Embedding(3, ACTOR_DIM)
         self.action_embed = nn.Embedding(3, ACTION_DIM)
-        self.hero_embed = nn.Embedding(NUM_HEROES + 1, embed_dim)
         self.fusion = nn.Sequential(
             nn.Linear(ACTOR_DIM + ACTION_DIM + embed_dim, embed_dim),
             nn.LayerNorm(embed_dim),
             nn.SiLU(),
         )
 
-    def forward(self, team_ids, action_ids, hero_ids):
+    def forward(self, team_ids, action_ids, hero_embs):
         team_emb = self.team_embed(team_ids)
         action_emb = self.action_embed(action_ids)
-        hero_emb = self.hero_embed(hero_ids)
-        return self.fusion(torch.cat([team_emb, action_emb, hero_emb], dim=-1))
+        return self.fusion(torch.cat([team_emb, action_emb, hero_embs], dim=-1))
 
 
 class PlayerEncoder(nn.Module):
@@ -93,6 +95,20 @@ class BPTransformerAgent(nn.Module):
             self.register_buffer('temperature', torch.ones(1))
         self.learnable_temperature = learnable_temperature
 
+        # Hero encoder: 使用多模态英雄编码器（属性 + 语义）
+        self.hero_encoder = MultiModalHeroEncoder(
+            embed_dim=embed_dim,
+            id_hidden_dim=128,
+            attr_hidden_dim=64,
+            use_text=True,
+            text_embed_dim=1024,
+            text_hidden_dim=128,
+            dropout=0.1,
+            num_res_layers=3,
+            attn_heads=4,
+            modality_dropout=0.1,
+        )
+
         self.action_encoder = ActionEncoder(embed_dim)
         self.player_encoder = PlayerEncoder(embed_dim)
         self.cls_tokens = nn.Parameter(torch.randn(1, 2, embed_dim))  # [radiant, dire]
@@ -107,6 +123,7 @@ class BPTransformerAgent(nn.Module):
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         self.policy_head = nn.Linear(embed_dim, NUM_HEROES)
+        setattr(self.policy_head, "_is_policy_head", True)
         self.value_head = nn.Sequential(
             nn.Linear(embed_dim, 512),
             nn.SiLU(),
@@ -130,6 +147,22 @@ class BPTransformerAgent(nn.Module):
                     for h in range(1, NUM_HEROES + 1)
                 ]
             ),
+            persistent=False,
+        )
+
+        first_hero_sem = next(iter(HERO_ID_SEMANTIC_MAP.values()))
+        default_device = first_hero_sem.device
+        self.register_buffer(
+            "all_hero_sem",
+            torch.stack(
+                [
+                    HERO_ID_SEMANTIC_MAP.get(
+                        h, torch.zeros(1024, device=default_device)
+                    )
+                    for h in range(1, NUM_HEROES + 1)
+                ]
+            ),
+            persistent=False,
         )
 
         # 应用统一的权重初始化，保证初始策略分布均匀，避免初始策略塌缩
@@ -138,6 +171,45 @@ class BPTransformerAgent(nn.Module):
     def get_temperature(self):
         """获取当前温度（用于动作采样），保证最小值防止除零。"""
         return self.temperature.clamp(min=0.1)
+
+    def hero_input_from_ids(self, hero_ids: torch.Tensor):
+        """根据英雄ID快速获取预计算的属性和语义特征
+
+        Args:
+            hero_ids: 任意形状，英雄ID（1-based, 1-160；0表示无效/padding）
+        Returns:
+            indices: 0-based 索引 (0-159)
+            attrs: 英雄属性
+            sem: 英雄语义
+        """
+        device = hero_ids.device
+        indices = hero_ids - 1
+        indices = torch.clamp(indices, min=0, max=NUM_HEROES - 1)
+        attrs = self.all_hero_attrs.to(device)[indices]
+        sem = self.all_hero_sem.to(device)[indices]
+        return indices, attrs, sem
+
+    def encode_hero_ids(self, hero_ids: torch.Tensor):
+        """将英雄ID编码为统一的多模态嵌入向量
+
+        Args:
+            hero_ids: 任意形状，英雄ID（1-based）
+        Returns:
+            hero_embs: [*original_shape, embed_dim]
+        """
+        original_shape = hero_ids.shape
+        flat_ids = hero_ids.view(-1)
+        indices, attrs, sem = self.hero_input_from_ids(flat_ids)
+
+        # hero_encoder 期望 [batch, seq_len]
+        indices = indices.unsqueeze(-1)  # [N, 1]
+        attrs = attrs.unsqueeze(1)       # [N, 1, F]
+        sem = sem.unsqueeze(1)           # [N, 1, S]
+
+        encoded = self.hero_encoder(indices, attrs, sem)  # [N, 1, embed_dim]
+        encoded = encoded.squeeze(1)  # [N, embed_dim]
+
+        return encoded.view(*original_shape, -1)
 
     def load_state_dict(self, state_dict, strict=True):
         """兼容旧 checkpoint：自动补全缺失的参数。"""
@@ -149,6 +221,11 @@ class BPTransformerAgent(nn.Module):
         if 'cls_token' in state_dict and 'cls_tokens' not in state_dict:
             old_cls = state_dict.pop('cls_token')  # [1, 1, embed_dim]
             state_dict['cls_tokens'] = torch.cat([old_cls, old_cls.clone()], dim=1)
+        # 兼容旧 checkpoint 缺少 hero_encoder 的情况
+        has_hero_encoder = any(k.startswith('hero_encoder') for k in state_dict.keys())
+        if not has_hero_encoder:
+            strict = False
+            print("[!] Loading old checkpoint without hero_encoder. Hero encoder will be randomly initialized.")
         super().load_state_dict(state_dict, strict=strict)
 
     def forward(self, state):
@@ -170,10 +247,13 @@ class BPTransformerAgent(nn.Module):
 
         T = state["action_history"]["teams"].shape[1]
         if T > 0:
+            history_hero_embs = self.encode_hero_ids(
+                state["action_history"]["heroes"].view(B * T)
+            ).view(B, T, -1)
             action_emb = self.action_encoder(
                 state["action_history"]["teams"].view(B * T),
                 state["action_history"]["actions"].view(B * T),
-                state["action_history"]["heroes"].view(B * T),
+                history_hero_embs.view(B * T, -1),
             ).view(B, T, -1)
         else:
             action_emb = torch.empty(
@@ -185,7 +265,7 @@ class BPTransformerAgent(nn.Module):
         dummy_hero = torch.zeros(
             B, dtype=torch.long, device=state["radiant_player_feats"].device
         )
-        current_hero_emb = self.action_encoder.hero_embed(dummy_hero)
+        current_hero_emb = self.encode_hero_ids(dummy_hero)
         current_q = self.action_encoder.fusion(
             torch.cat([current_actor_emb, current_action_emb, current_hero_emb], dim=-1)
         ).unsqueeze(1)

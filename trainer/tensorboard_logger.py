@@ -35,10 +35,21 @@ class TensorBoardLogger:
         # Start TensorBoard process with runs/ root to see all experiments
         self.tb_process = self._start_tensorboard_process("runs", self.port)
 
+        # Detect existing event files to warn about resume behavior
+        existing_events = []
+        if os.path.isdir(self.log_dir):
+            existing_events = [
+                f for f in os.listdir(self.log_dir)
+                if f.startswith("events.out.tfevents")
+            ]
+
         # Create writer (still writes to specific subdir)
         self.writer = SummaryWriter(log_dir=self.log_dir)
         print(f"[+] TensorBoard writer initialized")
         print(f"[+] Log directory: {self.log_dir}")
+        if existing_events:
+            print(f"[+] Found {len(existing_events)} existing event file(s). "
+                  f"TensorBoard will merge old and new events in the same run.")
         print(f"[+] View all experiments at http://localhost:{self.port}")
 
         return self.writer

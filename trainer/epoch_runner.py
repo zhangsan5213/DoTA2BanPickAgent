@@ -1,5 +1,6 @@
 """Epoch training runner with PPO epoch loop (inspired by GITCGRL)."""
 
+import time
 from typing import List, Dict, Any, Optional, Callable
 from tqdm import tqdm
 import torch
@@ -66,7 +67,9 @@ class EpochRunner:
         Returns:
             Dictionary of epoch statistics
         """
-        self.agent.train()
+        # Rollout collection runs in eval mode: dropout would otherwise inject noise
+        # into old_log_probs, value baselines and MCTS priors, corrupting the PPO ratio.
+        self.agent.eval()
 
         batch_size = self.config.batch_size
         num_batches = (len(samples) + batch_size - 1) // batch_size
@@ -86,12 +89,14 @@ class EpochRunner:
             range(num_batches), desc=f"Epoch {epoch + 1}/{total_epochs}", ncols=90
         )
 
+        batch_timings = []
         for batch_idx in pbar:
             start_idx = batch_idx * batch_size
             end_idx = min(start_idx + batch_size, len(samples))
             batch_samples = samples[start_idx:end_idx]
 
             # Collect rollouts
+            t0 = time.perf_counter()
             checkpoints = self.checkpoint_manager.checkpoints
             rollouts = self.rollout_collector.collect_batch(
                 batch_samples=batch_samples,
@@ -99,9 +104,11 @@ class EpochRunner:
                 checkpoint_manager=self.checkpoint_manager,
                 batch_idx=batch_idx,
             )
+            t1 = time.perf_counter()
 
             # Process rollouts with PPO epoch loop (GITCGRL style)
             batch_stats = self._process_rollouts_ppo_epochs(rollouts, writer, epoch=epoch)
+            t2 = time.perf_counter()
 
             # Update epoch stats
             for key in [
@@ -116,6 +123,19 @@ class EpochRunner:
                     epoch_stats[key] += batch_stats[key]
             epoch_stats["num_rollouts"] += len(rollouts)
 
+            batch_timings.append({
+                'rollout_ms': (t1 - t0) * 1000,
+                'ppo_ms': (t2 - t1) * 1000,
+                'total_ms': (t2 - t0) * 1000,
+                'num_rollouts': len(rollouts),
+            })
+
+            # Print timing every 4 batches
+            if (batch_idx + 1) % 4 == 0 or batch_idx == 0:
+                avg_rollout = sum(t['rollout_ms'] for t in batch_timings[-4:]) / len(batch_timings[-4:])
+                avg_ppo = sum(t['ppo_ms'] for t in batch_timings[-4:]) / len(batch_timings[-4:])
+                print(f"\n[Profile Batch {batch_idx+1}] rollout={avg_rollout:7.1f}ms | ppo={avg_ppo:7.1f}ms | rollouts={len(rollouts)}")
+
             # Update progress bar
             avg_loss = epoch_stats["total_loss"] / max(epoch_stats["num_rollouts"], 1)
             avg_kl = epoch_stats["kl_div"] / max(epoch_stats["num_rollouts"], 1)
@@ -126,6 +146,21 @@ class EpochRunner:
 
             if progress_callback:
                 progress_callback(epoch, batch_idx, num_batches, avg_loss)
+
+        # Print epoch timing summary
+        if batch_timings:
+            total_rollout = sum(t['rollout_ms'] for t in batch_timings)
+            total_ppo = sum(t['ppo_ms'] for t in batch_timings)
+            total_all = sum(t['total_ms'] for t in batch_timings)
+            print(f"\n{'='*70}")
+            print(f"EPOCH {epoch+1} TIMING SUMMARY")
+            print(f"{'='*70}")
+            print(f"  Rollout collection: {total_rollout/1000:.1f}s ({total_rollout/total_all*100:.1f}%)")
+            print(f"  PPO training:       {total_ppo/1000:.1f}s ({total_ppo/total_all*100:.1f}%)")
+            print(f"  Total batch time:   {total_all/1000:.1f}s")
+            print(f"  Num batches:        {len(batch_timings)}")
+            print(f"  Avg batch time:     {total_all/len(batch_timings)/1000:.1f}s")
+            print(f"{'='*70}")
 
         # Compute averages
         if epoch_stats["num_rollouts"] > 0:
@@ -169,6 +204,10 @@ class EpochRunner:
 
         if not rollouts:
             return batch_stats
+
+        # PPO update phase runs in train mode (dropout active); rollout collection
+        # above used eval mode to keep behavior-policy quantities noise-free.
+        self.agent.train()
 
         # Get PPO epoch configuration
         ppo_epochs = getattr(self.config, "ppo_epochs", 4)
@@ -327,6 +366,7 @@ class EpochRunner:
             early_stop_info = f", Early Stops: {batch_stats['early_stops']}"
 
         print(
+            f"\n"
             f"[Batch Stats] Global Step: {self.global_step}, Total Loss: {batch_stats['total_loss']:.4f}, "
             f"Policy Loss: {batch_stats['policy_loss']:.4f}, Value Loss: {batch_stats['value_loss']:.4f}, "
             f"Entropy Loss: {batch_stats['entropy_loss']:.4f}, KL: {batch_stats['kl_div']:.4f}"

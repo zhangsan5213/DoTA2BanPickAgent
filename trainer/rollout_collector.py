@@ -9,9 +9,11 @@ import torch.multiprocessing as mp
 
 from model.bp_agent import BPTransformerAgent
 from model.win_rate_oracle import WinRateOracle
-from utils.bp_env import collect_rollout
+from utils.bp_env import collect_rollout, BPState
+from utils.batched_rollout import collect_batched_rollouts
 from utils.device import DEVICE
 from eval.trueskill_rating import TrueSkillRatingManager, INITIAL_MU, INITIAL_SIGMA
+from search.mcts_batched import BatchMCTSEngine
 
 
 def _collect_rollout_worker(args: tuple) -> Dict[str, Any]:
@@ -124,6 +126,7 @@ class RolloutCollector:
         num_strata: int = 3,
         use_mcts: bool = False,
         mcts_config: Optional[Dict[str, Any]] = None,
+        use_batched_mcts: bool = True,
     ):
         """
         Args:
@@ -147,6 +150,7 @@ class RolloutCollector:
             num_strata: Number of rating strata for stratified sampling.
             use_mcts: Whether to use MCTS for training rollouts.
             mcts_config: Dict with MCTS hyperparameters (c_puct, num_simulations, top_k).
+            use_batched_mcts: Whether to use batched MCTS (much faster than threaded).
         """
         self.agent = agent
         self.oracle = oracle
@@ -160,6 +164,7 @@ class RolloutCollector:
         self.num_strata = num_strata
         self.use_mcts = use_mcts
         self.mcts_config = mcts_config or {}
+        self.use_batched_mcts = use_batched_mcts
 
         # Parallel configuration
         self.use_parallel = use_parallel
@@ -199,6 +204,12 @@ class RolloutCollector:
         Returns:
             List of rollouts
         """
+        # Use batched MCTS if enabled and we're using MCTS with self-play rollouts
+        if self.use_mcts and self.use_batched_mcts:
+            return self._collect_batch_batched_mcts(
+                batch_samples, checkpoints, checkpoint_manager, batch_idx
+            )
+        # Fall back to original methods
         if self.use_parallel and len(batch_samples) > 1:
             if self.use_mcts:
                 return self._collect_batch_threaded(
@@ -211,6 +222,63 @@ class RolloutCollector:
             return self._collect_batch_sequential(
                 batch_samples, checkpoints, checkpoint_manager, batch_idx
             )
+
+    def _collect_batch_batched_mcts(
+        self,
+        batch_samples: List[Dict[str, Any]],
+        checkpoints: List,
+        checkpoint_manager,
+        batch_idx: int
+    ) -> List[Dict[str, Any]]:
+        """Collect rollouts using FULLY batched MCTS - most efficient approach.
+
+        This collects all MCTS decisions across ALL rollouts in the batch and runs
+        them in a single batch, maximizing GPU utilization.
+        """
+        batch_size = len(batch_samples)
+        num_hist = int(batch_size * self.historical_prob)
+
+        # Prepare opponent_agents list for ALL rollouts (self-play + historical)
+        opponent_agents = [None] * batch_size  # (opponent_agent, current_side, staleness)
+        hist_assignments = []
+
+        # Load historical opponents if needed
+        if num_hist > 0 and checkpoints:
+            hist_assignments = self._assign_historical_opponents(
+                num_hist, checkpoints
+            )
+
+            # Group by checkpoint index to load efficiently
+            ckpt_idx_to_samples = {}
+            for sample_idx, ckpt_idx in hist_assignments:
+                ckpt_path = checkpoints[ckpt_idx][0]
+                if ckpt_idx not in ckpt_idx_to_samples:
+                    ckpt_idx_to_samples[ckpt_idx] = []
+                ckpt_idx_to_samples[ckpt_idx].append((sample_idx, ckpt_path))
+
+            # Load each model once and set up opponent_agents entries
+            for ckpt_idx, sample_list in ckpt_idx_to_samples.items():
+                ckpt_path = sample_list[0][1]
+                opponent = checkpoint_manager.load_opponent(ckpt_path)
+
+                if opponent is not None:
+                    for sample_idx, _ in sample_list:
+                        current_side = random.choice(["radiant", "dire"])
+                        opponent_agents[sample_idx] = (opponent, current_side, ckpt_idx)
+
+        # Use fully batched rollout collector for ALL rollouts at once
+        all_rollouts = collect_batched_rollouts(
+            self.agent,
+            self.oracle,
+            batch_samples,
+            temperature=self.temperature,
+            use_mcts=self.use_mcts,
+            mcts_config=self.mcts_config,
+            opponent_agents=opponent_agents,
+            policy_staleness_tolerance=self.policy_staleness_tolerance,
+        )
+
+        return all_rollouts
 
     def _collect_batch_sequential(
         self,
@@ -567,4 +635,5 @@ class RolloutCollector:
             "oracle_config": self.oracle_config,
             "use_mcts": self.use_mcts,
             "mcts_config": self.mcts_config,
+            "use_batched_mcts": self.use_batched_mcts,
         }

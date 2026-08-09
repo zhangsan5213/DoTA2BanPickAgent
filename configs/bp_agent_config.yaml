@@ -1,7 +1,7 @@
 # BP Agent Training Configuration (GITCGRL-inspired)
 
 # Training hyperparameters
-actor_lr: 2e-4
+actor_lr: 1e-4
 
 # Policy temperature (GITCGRL-inspired exploration control)
 # High temperature -> more random exploration during rollouts
@@ -12,18 +12,18 @@ agent_temperature: 1.0
 agent_learnable_temperature: false
 
 # Loss coefficients
-value_loss_coeff: 0.5
+value_loss_coeff: 2.0
 entropy_loss_coeff: 0.03
 
 # Entropy 退火配置
 entropy_annealing:
   enabled: true            # 启用熵退火，让策略从探索转向利用
   initial_coeff: 0.03      # 初始熵系数
-  final_coeff: 0.005       # 最终熵系数（更低，鼓励利用）
+  final_coeff: 0.01        # 最终熵系数（更低，鼓励利用）
   type: "linear"           # 可选: linear, exponential, cosine
 
   # 按epoch退火参数
-  total_epochs: 32         # 退火总epoch数（通常等于训练epochs）
+  total_epochs: 16         # 退火总epoch数（通常等于训练epochs）
 
   # 按步数退火参数（优先于epoch）
   warmup_steps: 500        # 前N步保持initial_coeff
@@ -34,10 +34,10 @@ tensorboard_log_prefix: "bp_agent_exp_"
 
 # Rating/Evaluation config
 rating:
-  method: "trueskill"  # "elo" or "trueskill"
+  method: "trueskill"   # "elo" or "trueskill"
   eval_interval: 1      # evaluate every N epochs
   num_opponents: 8      # opponents per evaluation
-  num_player_sets: 16   # player sets per opponent
+  num_player_sets: 48   # player sets per opponent (increased for less noise)
 
   # ELO-specific config
   elo:
@@ -50,10 +50,10 @@ rating:
   trueskill:
     initial_mu: 25.0
     initial_sigma: 8.33
-    beta: 4.17
-    tau: 0.083
+    beta: 2.5          # Reduced from 4.17 for better separability (less luck assumed)
+    tau: 0.167         # Increased from 0.083 for faster adaptation
     draw_probability: 0.0
-    opponent_sample_std: 2.0
+    opponent_sample_std: 5.0  # Increased from 2.0 for wider opponent sampling
     staleness_threshold: 4
     num_active_models: 16
 
@@ -61,7 +61,7 @@ rating:
 ppo:
   # PPO Clip参数
   clip_ratio: 0.2             # PPO clip epsilon
-  value_clip_ratio: 1.0       # Value function clip epsilon (effectively disabled for [-1,1] returns)
+  value_clip_ratio: 0.5       # Value function clip epsilon (effectively disabled for [-1,1] returns)
   
   # PPO Epoch Loop (关键改进：复用数据多次更新)
   ppo_epochs: 3               # 每批rollout训练几轮PPO (降低以避免过优化)
@@ -85,11 +85,15 @@ ppo:
 # MCTS Configuration (lightweight search for training rollouts)
 mcts:
   enabled: true               # 训练中启用MCTS生成更高质量rollout
-  num_simulations: 8          # 训练时每步模拟次数（降低以换取速度）
-  c_puct: 1.5                 # UCB探索系数
-  top_k: 8                    # 策略裁剪：只保留top-k动作分支（降低分支数）
-  policy_loss_weight: 1.0     # MCTS策略损失权重（与PPO损失混合）
-  use_mcts_policy_loss: false # 是否将MCTS visit分布作为辅助损失目标
+  use_batched: true           # 使用批处理MCTS（比线程方式快得多）
+  num_simulations: 32         # 搜索改进量必须大于原始策略，否则CE只是自我蒸馏
+  c_puct: 2                   # UCB探索系数
+  top_k: 12                   # 策略裁剪：配合Dirichlet噪声放宽分支数
+  dirichlet_alpha: 0.3        # root Dirichlet噪声浓度（AlphaZero式探索）
+  dirichlet_epsilon: 0.25     # root 噪声混合比例
+  max_search_depth: 4         # fast rollout深度上限：超过此深度用oracle快速模拟
+  policy_loss_weight: 1.0     # MCTS策略损失权重（1.0=纯AlphaZero式CE，PPO项权重为0）
+  use_mcts_policy_loss: true  # 启用MCTS visit分布作为策略损失目标（唯一的per-action信号）
 
 # 学习率调度配置
 lr_scheduler:
@@ -120,15 +124,15 @@ lr_scheduler:
 
 # Training defaults (used in __main__)
 training:
-  epochs: 32
-  value_warmup_epochs: 1          # 前N个epoch只训练value head，让value function先学会预测
-  batch_size: 64                  # each batch, all samples are used for rollouts
-  gradient_accumulation_steps: 8  # 梯度累积步数
-  effective_batch_size: 512       # batch_size * accumulation_steps
-  samples_per_epoch: 1024         # 每epoch采样总数 (num_opponents * num_player_sets * samples_per_set)
+  epochs: 64                        # 总训练epoch数
+  value_warmup_epochs: 2            # 前N个epoch只训练value head，让value function先学会预测
+  batch_size: 64                    # each batch, all samples are used for rollouts
+  gradient_accumulation_steps: 2    # 梯度累积步数
+  effective_batch_size: 128         # batch_size * accumulation_steps
+  samples_per_epoch: 128            # 每epoch采样总数（2 batches x 64，加快评估反馈）
   use_tensorboard: true
-  historical_opponent_prob: 0.3   # 30% vs 历史模型 (GITCGRL style)
-  policy_staleness_tolerance: 2   # 最近N个历史ckpt的对手数据也参与训练
-  num_strata: 3                   # TrueSkill 分层抽样的层数
+  historical_opponent_prob: 0.3     # 30% vs 历史模型 (GITCGRL style)
+  policy_staleness_tolerance: 2     # 最近N个历史ckpt的对手数据也参与训练
+  num_strata: 3                     # TrueSkill 分层抽样的层数
   checkpoint_dirs:
     - "./ckpts/bp_agent-trueskill"  # directories to scan for historical checkpoints

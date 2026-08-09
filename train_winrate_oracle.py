@@ -279,7 +279,7 @@ def train(load_model_path: str = None, epochs: int = 32, terminal_win_rate_thres
         correct = 0
         total_samples = 0
         
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", ncols=160)
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", ncols=90)
         
         for batch_idx, (r_ids, r_attrs, r_sem, d_ids, d_attrs, d_sem, r_player_feats, d_player_feats, labels) in enumerate(pbar):
             r_ids, r_attrs, r_sem = r_ids.to(device), r_attrs.to(device), r_sem.to(device)

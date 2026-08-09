@@ -36,21 +36,16 @@ from eval.rating_base import (
 
 
 # ============== TrueSkill 环境配置 ==============
-# 使用全局 TrueSkill 环境，参数与原实现保持一致
-INITIAL_MU = 25.0
-INITIAL_SIGMA = 25.0 / 3
-BETA = INITIAL_SIGMA / 2
-TAU = INITIAL_SIGMA / 100
-DRAW_PROBABILITY = 0.0
+# 默认参数（可通过 TrueSkillRatingManager 覆盖）
+DEFAULT_INITIAL_MU = 25.0
+DEFAULT_INITIAL_SIGMA = 25.0 / 3
+DEFAULT_BETA = DEFAULT_INITIAL_SIGMA / 2
+DEFAULT_TAU = DEFAULT_INITIAL_SIGMA / 100
+DEFAULT_DRAW_PROBABILITY = 0.0
 
-# 创建全局 TrueSkill 环境
-TS_ENV = trueskill.TrueSkill(
-    mu=INITIAL_MU,
-    sigma=INITIAL_SIGMA,
-    beta=BETA,
-    tau=TAU,
-    draw_probability=DRAW_PROBABILITY,
-)
+# Backward compatibility aliases
+INITIAL_MU = DEFAULT_INITIAL_MU
+INITIAL_SIGMA = DEFAULT_INITIAL_SIGMA
 
 # 对手选择参数
 OPPONENT_SAMPLE_STD = 2.0
@@ -64,8 +59,8 @@ NUM_PLAYER_SETS = 16
 class ModelTrueSkillRecord(ModelRatingRecord):
     """模型 TrueSkill 记录"""
 
-    mu: float = INITIAL_MU
-    sigma: float = INITIAL_SIGMA
+    mu: float = DEFAULT_INITIAL_MU
+    sigma: float = DEFAULT_INITIAL_SIGMA
     staleness: int = 0
 
     @property
@@ -98,8 +93,8 @@ class ModelTrueSkillRecord(ModelRatingRecord):
     def from_dict(cls, data: dict) -> "ModelTrueSkillRecord":
         return cls(
             model_path=data["model_path"],
-            mu=data.get("mu", INITIAL_MU),
-            sigma=data.get("sigma", INITIAL_SIGMA),
+            mu=data.get("mu", DEFAULT_INITIAL_MU),
+            sigma=data.get("sigma", DEFAULT_INITIAL_SIGMA),
             staleness=data.get("staleness", 0),
             wins=data.get("wins", 0),
             losses=data.get("losses", 0),
@@ -117,14 +112,55 @@ class TrueSkillRatingManager(RatingManagerBase):
     NUM_ACTIVE_MODELS = 5
     NUM_REFRESH_BATTLES = 3
 
+    def __init__(
+        self,
+        save_dir: str = "./ckpts/bp_agent",
+        additional_dirs: Optional[List[str]] = None,
+        initial_mu: float = DEFAULT_INITIAL_MU,
+        initial_sigma: float = DEFAULT_INITIAL_SIGMA,
+        beta: float = DEFAULT_BETA,
+        tau: float = DEFAULT_TAU,
+        draw_probability: float = DEFAULT_DRAW_PROBABILITY,
+        opponent_sample_std: float = 2.0,
+    ):
+        """Initialize TrueSkill rating manager with custom parameters.
+
+        Args:
+            save_dir: Directory to save ratings
+            additional_dirs: Additional directories to load ratings from
+            initial_mu: Initial mean rating
+            initial_sigma: Initial standard deviation
+            beta: Skill variance (lower = more separability)
+            tau: Dynamic factor (adds uncertainty over time)
+            draw_probability: Probability of draw
+            opponent_sample_std: Std for opponent sampling (higher = wider sampling)
+        """
+        self.initial_mu = initial_mu
+        self.initial_sigma = initial_sigma
+        self.beta = beta
+        self.tau = tau
+        self.draw_probability = draw_probability
+        self.opponent_sample_std = opponent_sample_std
+
+        # Create TrueSkill environment for this instance
+        self.ts_env = trueskill.TrueSkill(
+            mu=initial_mu,
+            sigma=initial_sigma,
+            beta=beta,
+            tau=tau,
+            draw_probability=draw_probability,
+        )
+
+        super().__init__(save_dir=save_dir, additional_dirs=additional_dirs)
+
     def _get_db_path(self) -> Path:
         """获取数据库文件路径"""
         return self.save_dir / "trueskill_ratings.json"
 
     def _create_record(self, model_path: str, **kwargs) -> ModelTrueSkillRecord:
         """创建新的评分记录"""
-        mu = kwargs.get("mu", INITIAL_MU)
-        sigma = kwargs.get("sigma", INITIAL_SIGMA)
+        mu = kwargs.get("mu", self.initial_mu)
+        sigma = kwargs.get("sigma", self.initial_sigma)
         staleness = kwargs.get("staleness", 0)
         return ModelTrueSkillRecord(
             model_path=model_path,
@@ -232,17 +268,17 @@ class TrueSkillRatingManager(RatingManagerBase):
         # TrueSkill 的 ranks: 0 表示赢，数字越大越弱
         if score_a > 0.5 + 1e-8:
             # A 赢: ranks = [0, 1]
-            new_rating_a, new_rating_b = TS_ENV.rate_1vs1(rating_a, rating_b)
+            new_rating_a, new_rating_b = self.ts_env.rate_1vs1(rating_a, rating_b)
             record_a.wins += 1
             record_b.losses += 1
         elif score_a < 0.5 - 1e-8:
             # B 赢: ranks = [1, 0]，通过交换顺序实现
-            new_rating_b, new_rating_a = TS_ENV.rate_1vs1(rating_b, rating_a)
+            new_rating_b, new_rating_a = self.ts_env.rate_1vs1(rating_b, rating_a)
             record_a.losses += 1
             record_b.wins += 1
         else:
             # 平局
-            (new_rating_a,), (new_rating_b,) = TS_ENV.rate(
+            (new_rating_a,), (new_rating_b,) = self.ts_env.rate(
                 [(rating_a,), (rating_b,)], ranks=[0, 0]
             )
             record_a.draws += 1
@@ -289,7 +325,7 @@ class TrueSkillRatingManager(RatingManagerBase):
         if model_a_path in self.records:
             mu_before = self.records[model_a_path].mu
         else:
-            mu_before = INITIAL_MU
+            mu_before = DEFAULT_INITIAL_MU
 
         # 混合对战顺序以避免顺序偏差
         battles = []
@@ -312,18 +348,18 @@ class TrueSkillRatingManager(RatingManagerBase):
         """获取模型的保守评分（mu - 3*sigma）"""
         record = self.records.get(model_path)
         if record is None:
-            return INITIAL_MU - 3 * INITIAL_SIGMA
+            return self.initial_mu - 3 * self.initial_sigma
         return record.rating
 
     def get_exposure(self, model_path: str) -> float:
         """获取模型的暴露评分（mu）"""
         record = self.records.get(model_path)
         if record is None:
-            return INITIAL_MU
+            return self.initial_mu
         return record.mu
 
     def select_opponents(
-        self, current_model_path: str, num_opponents: int = NUM_OPPONENTS_TO_SAMPLE
+        self, current_model_path: str, num_opponents: int = 5
     ) -> List[str]:
         """
         根据当前模型 TrueSkill，使用正态分布采样选择对手
@@ -348,7 +384,7 @@ class TrueSkillRatingManager(RatingManagerBase):
         weights = []
         for path in other_models:
             mu = self.records[path].mu
-            weight = np.exp(-0.5 * ((mu - current_mu) / OPPONENT_SAMPLE_STD) ** 2)
+            weight = np.exp(-0.5 * ((mu - current_mu) / self.opponent_sample_std) ** 2)
             weights.append(weight)
 
         weights = np.array(weights)
@@ -499,7 +535,9 @@ class BPBattleSimulator(BattleSimulatorBase):
 
     def load_agent(self, model_path: str) -> BPTransformerAgent:
         agent = BPTransformerAgent(embed_dim=256, nhead=8, num_layers=4).to(DEVICE)
-        agent.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        ckpt = torch.load(model_path, map_location=DEVICE)
+        state_dict = ckpt["agent_state"] if isinstance(ckpt, dict) and "agent_state" in ckpt else ckpt
+        agent.load_state_dict(state_dict)
         agent.eval()
         return agent
 
@@ -692,12 +730,12 @@ def evaluate_and_update_trueskill(
 
     for opponent_path in opponents:
         opponent_record = rating_manager.get_record(opponent_path)
-        opponent_mu = opponent_record.mu if opponent_record else INITIAL_MU
-        opponent_sigma = opponent_record.sigma if opponent_record else INITIAL_SIGMA
+        opponent_mu = opponent_record.mu if opponent_record else DEFAULT_INITIAL_MU
+        opponent_sigma = opponent_record.sigma if opponent_record else DEFAULT_INITIAL_SIGMA
         opponent_rating = (
             opponent_record.rating
             if opponent_record
-            else (INITIAL_MU - 3 * INITIAL_SIGMA)
+            else (DEFAULT_INITIAL_MU - 3 * DEFAULT_INITIAL_SIGMA)
         )
 
         print(
@@ -775,7 +813,7 @@ def evaluate_and_update_trueskill(
     }
 
 
-def print_trueskill_leaderboard(save_dir: str = "./ckpts/bp_agent"):
+def print_trueskill_leaderboard(save_dir: str = "./ckpts/bp_agent", name_overrides=None):
     """打印 TrueSkill 排行榜"""
     rating_manager = TrueSkillRatingManager(save_dir)
 
@@ -816,6 +854,8 @@ def print_trueskill_leaderboard(save_dir: str = "./ckpts/bp_agent"):
             rating_str = "-"
             stale_str = "-"
         model_name = os.path.basename(path)[:38]
+        if name_overrides and path in name_overrides:
+            model_name = name_overrides[path][:38]
         print(
             f"{rank:<6}{model_name:<40}{mu_str:<9}{sigma_str:<9}{rating_str:<9}{wl:<12}{stale_str:<6}"
         )
@@ -843,15 +883,31 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
         save_dir: str = "./ckpts/bp_agent",
         oracle: Optional[WinRateOracle] = None,
         oracle_path: Optional[str] = None,
-        num_opponents: int = NUM_OPPONENTS_TO_SAMPLE,
-        num_player_sets: int = NUM_PLAYER_SETS,
+        num_opponents: int = 5,
+        num_player_sets: int = 16,
         staleness_threshold: int = 5,
         num_active_models: int = 5,
         additional_dirs: Optional[List[str]] = None,
+        # TrueSkill-specific parameters
+        initial_mu: float = DEFAULT_INITIAL_MU,
+        initial_sigma: float = DEFAULT_INITIAL_SIGMA,
+        beta: float = DEFAULT_BETA,
+        tau: float = DEFAULT_TAU,
+        draw_probability: float = DEFAULT_DRAW_PROBABILITY,
+        opponent_sample_std: float = 2.0,
     ):
         super().__init__(save_dir, num_opponents, num_player_sets)
 
-        self.rating_manager = TrueSkillRatingManager(save_dir=save_dir, additional_dirs=additional_dirs)
+        self.rating_manager = TrueSkillRatingManager(
+            save_dir=save_dir,
+            additional_dirs=additional_dirs,
+            initial_mu=initial_mu,
+            initial_sigma=initial_sigma,
+            beta=beta,
+            tau=tau,
+            draw_probability=draw_probability,
+            opponent_sample_std=opponent_sample_std,
+        )
         self.battle_simulator = BPBattleSimulator(
             oracle=oracle, oracle_path=oracle_path
         )
@@ -907,11 +963,11 @@ class TrueSkillEvaluator(RatingEvaluatorBase):
             record = self.rating_manager.register_model(model_path)
         return record.sigma
 
-    def print_leaderboard(self):
-        print_trueskill_leaderboard(save_dir=self.save_dir)
+    def print_leaderboard(self, name_overrides=None):
+        print_trueskill_leaderboard(save_dir=self.save_dir, name_overrides=name_overrides)
 
     def register_model(
-        self, model_path: str, mu: float = INITIAL_MU, sigma: float = INITIAL_SIGMA
+        self, model_path: str, mu: float = DEFAULT_INITIAL_MU, sigma: float = DEFAULT_INITIAL_SIGMA
     ) -> ModelTrueSkillRecord:
         return self.rating_manager.register_model(model_path, mu=mu, sigma=sigma)
 
@@ -932,7 +988,7 @@ if __name__ == "__main__":
 
     for i, model in enumerate(test_models):
         mu = 25.0 + (i - 1) * 5
-        record = manager.register_model(model, mu=mu, sigma=INITIAL_SIGMA)
+        record = manager.register_model(model, mu=mu, sigma=DEFAULT_INITIAL_SIGMA)
         print(
             f"Registered {model}: μ={record.mu:.2f}, σ={record.sigma:.2f}, Rating={record.rating:.2f}"
         )

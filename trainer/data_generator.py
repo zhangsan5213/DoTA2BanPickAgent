@@ -1,6 +1,7 @@
 """Data generation for training samples."""
 
 from typing import List, Dict, Any
+from tqdm import tqdm
 from utils.player_preference_sampler_optimized import (
     sample_player_preferences_batch,
     _load_hero_data,
@@ -53,11 +54,11 @@ class DataGenerator:
         print(f"[DataGenerator] Generating preferences for {total_players} players...")
 
         all_players = sample_player_preferences_batch(
-            num_players=total_players, m=3, n=5, use_parallel=num_samples > 20
+            num_players=total_players, m=3, n=5, use_parallel=False
         )
 
         samples = []
-        for i in range(num_samples):
+        for i in tqdm(range(num_samples), desc="Assembling Samples", leave=False, ncols=90):
             start_idx = i * 10
             r_players = all_players[start_idx : start_idx + 5]
             d_players = all_players[start_idx + 5 : start_idx + 10]

@@ -266,7 +266,7 @@ class RatingEvaluatorBase(ABC):
         pass
     
     @abstractmethod
-    def print_leaderboard(self):
+    def print_leaderboard(self, name_overrides=None):
         """打印排行榜"""
         pass
     

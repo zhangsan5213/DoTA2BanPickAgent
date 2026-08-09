@@ -1,13 +1,14 @@
 """BP Environment and RL utilities"""
 
 import os
+from typing import List, Dict, Any
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import torch
 import torch.nn.functional as F
 from utils.device import DEVICE
-from utils.raw_data import NUM_HEROES, get_valid_hero_ids
+from utils.raw_data import NUM_HEROES, get_valid_hero_ids, STATIC_HERO_MASK
 
 
 class BPState:
@@ -162,6 +163,80 @@ class BPState:
             "current_action": torch.tensor([current_action_type], device=device),
         }
 
+    @classmethod
+    def batch_to_dict(cls, states: List['BPState'], device=DEVICE) -> Dict[str, Any]:
+        """Batch convert multiple BPState objects to a collated batch dict.
+
+        IMPORTANT: All states must have the SAME action history length!
+
+        Args:
+            states: List of BPState objects
+            device: Target device for tensors
+
+        Returns:
+            Collated batch dict ready for model forward pass
+        """
+        batch_size = len(states)
+        if batch_size == 0:
+            return {}
+
+        # Collect all raw data first (minimal Python work)
+        all_r_players = []
+        all_d_players = []
+        all_history_teams = []
+        all_history_actions = []
+        all_history_heroes = []
+        all_current_actor = []
+        all_current_action = []
+
+        for state in states:
+            all_r_players.append(state.radiant_players)
+            all_d_players.append(state.dire_players)
+            all_history_teams.append(state.history["teams"])
+            all_history_actions.append(state.history["actions"])
+            all_history_heroes.append(state.history["heroes"])
+            all_current_actor.append(0 if state.is_radiant_turn else 1)
+            all_current_action.append(1 if state.get_current_action_type() == "pick" else 2)
+
+        # Create tensors in ONE shot per type (minimal torch.tensor calls)
+        # Player feats: handle list vs tensor
+        if all(isinstance(p, torch.Tensor) for p in all_r_players):
+            r_feats = torch.stack(all_r_players, dim=0).float().to(device)
+        else:
+            r_feats = torch.tensor(all_r_players, dtype=torch.float32, device=device)
+
+        if all(isinstance(p, torch.Tensor) for p in all_d_players):
+            d_feats = torch.stack(all_d_players, dim=0).float().to(device)
+        else:
+            d_feats = torch.tensor(all_d_players, dtype=torch.float32, device=device)
+
+        # History tensors
+        hist_len = len(all_history_teams[0]) if all_history_teams else 0
+        if hist_len > 0:
+            teams_tensor = torch.tensor(all_history_teams, dtype=torch.long, device=device)
+            actions_tensor = torch.tensor(all_history_actions, dtype=torch.long, device=device)
+            heroes_tensor = torch.tensor(all_history_heroes, dtype=torch.long, device=device)
+        else:
+            teams_tensor = torch.zeros(batch_size, 0, dtype=torch.long, device=device)
+            actions_tensor = torch.zeros(batch_size, 0, dtype=torch.long, device=device)
+            heroes_tensor = torch.zeros(batch_size, 0, dtype=torch.long, device=device)
+
+        # Current actor/action
+        current_actor_tensor = torch.tensor(all_current_actor, dtype=torch.long, device=device)
+        current_action_tensor = torch.tensor(all_current_action, dtype=torch.long, device=device)
+
+        return {
+            "radiant_player_feats": r_feats,
+            "dire_player_feats": d_feats,
+            "action_history": {
+                "teams": teams_tensor,
+                "actions": actions_tensor,
+                "heroes": heroes_tensor,
+            },
+            "current_actor": current_actor_tensor,
+            "current_action": current_action_tensor,
+        }
+
     def step(self, hero_id, is_pick=None):
         """
         执行一步BP
@@ -270,17 +345,21 @@ def compute_gae(
     return advantages, returns
 
 
-def normalize_advantages(advantages, eps=1e-8):
+def normalize_advantages(advantages, eps=1e-8, min_std=0.1):
     """
     Advantage归一化 - 关键trick，能显著提高PPO稳定性
 
     归一化后的advantages有:
     - 零均值: 避免policy偏向正advantage的方向
     - 单位方差: 控制梯度大小，使学习率更稳定
+
+    min_std: std下限。value拟合较好时minibatch内advantage接近纯噪声且std极小，
+    无下限的归一化会把噪声放大回单位方差，以恒定强度向actor注入随机梯度。
     """
     if advantages.numel() <= 1:
         return advantages
-    return (advantages - advantages.mean()) / (advantages.std() + eps)
+    std = advantages.std().clamp_min(min_std)
+    return (advantages - advantages.mean()) / (std + eps)
 
 
 def ppo_loss(log_probs, old_log_probs, advantages, clip_eps=CLIP_EPS):
@@ -401,12 +480,10 @@ def collect_rollout(
         if not valid_actions:
             break
 
-        # 创建mask：只允许选择实际存在且未被使用的英雄
-        mask = torch.full((NUM_HEROES,), -1e9, device=action_logits.device)
-        all_valid_ids = get_valid_hero_ids()
-        for h in all_valid_ids:
-            if h <= NUM_HEROES:
-                mask[h - 1] = 0.0
+        # 创建mask：只允许选择实际存在且未被使用的英雄 - use precomputed static mask
+        # Start with precomputed static mask (shape: [NUM_HEROES+1], index 0 = hero_id 0)
+        mask = STATIC_HERO_MASK[1:NUM_HEROES+1].to(device).clone()  # [NUM_HEROES], index 0 = hero_id 1
+        # Mask out used heroes
         used = set(s.radiant_heroes + s.dire_heroes + s.radiant_bans + s.dire_bans)
         for h in used:
             if h <= NUM_HEROES:

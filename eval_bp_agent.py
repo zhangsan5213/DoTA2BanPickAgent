@@ -86,8 +86,10 @@ class BPDuelSimulator:
     
     def load_agent(self, model_path: str) -> BPTransformerAgent:
         """加载 BP Agent 模型"""
-        agent = BPTransformerAgent(embed_dim=128, nhead=8, num_layers=4).to(DEVICE)
-        agent.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        agent = BPTransformerAgent(embed_dim=256, nhead=8, num_layers=4).to(DEVICE)
+        ckpt = torch.load(model_path, map_location=DEVICE)
+        state_dict = ckpt["agent_state"] if isinstance(ckpt, dict) and "agent_state" in ckpt else ckpt
+        agent.load_state_dict(state_dict)
         agent.eval()
         return agent
     

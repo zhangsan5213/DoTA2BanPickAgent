@@ -149,6 +149,7 @@ class BPAgentTrainer:
 
         # Resume from checkpoint if provided
         ckpt_data = None
+        resumed_from_checkpoint = False
         if self.resume_from is not None:
             ckpt_data = torch.load(self.resume_from, map_location='cpu')
             if isinstance(ckpt_data, dict) and "agent_state" in ckpt_data:
@@ -157,12 +158,14 @@ class BPAgentTrainer:
                 self.start_epoch = ckpt_data.get("epoch", 0)
                 self.start_global_step = ckpt_data.get("global_step", 0)
                 self.start_grad_accum_step = ckpt_data.get("grad_accum_step", 0)
+                resumed_from_checkpoint = True
                 # Don't reuse log_dir - always create new
                 print(f"[+] Loaded full checkpoint from {self.resume_from}")
                 print(f"[+] Resuming training from epoch {self.start_epoch}, global_step={self.start_global_step}")
             else:
                 # Old-style checkpoint (agent state_dict only)
                 self.agent.load_state_dict(ckpt_data)
+                resumed_from_checkpoint = True
                 print(f"[+] Loaded agent checkpoint from {self.resume_from}")
                 # Parse epoch number from filename (e.g., bp_agent_epoch4.pth -> 4)
                 basename = os.path.basename(self.resume_from)
@@ -172,6 +175,11 @@ class BPAgentTrainer:
                         print(f"[+] Resuming training from epoch {self.start_epoch}")
                     except ValueError:
                         self.start_epoch = 0
+
+        # Initialize hero_encoder from oracle when starting fresh training
+        if not resumed_from_checkpoint:
+            self.agent.hero_encoder.load_state_dict(self.oracle.hero_encoder.state_dict())
+            print("[+] Initialized agent hero_encoder from oracle")
 
         self.optimizer = initialize_optimizer(self.agent, self.config)
 
@@ -219,6 +227,9 @@ class BPAgentTrainer:
                 "num_simulations": getattr(self.config, 'mcts_num_simulations', 64),
                 "c_puct": getattr(self.config, 'mcts_c_puct', 1.5),
                 "top_k": getattr(self.config, 'mcts_top_k', 20),
+                "dirichlet_alpha": getattr(self.config, 'mcts_dirichlet_alpha', 0.0),
+                "dirichlet_epsilon": getattr(self.config, 'mcts_dirichlet_epsilon', 0.0),
+                "max_search_depth": getattr(self.config, 'mcts_max_search_depth', 0),
             }
 
         self.rollout_collector = RolloutCollector(
@@ -239,6 +250,7 @@ class BPAgentTrainer:
             mcts_config=mcts_config,
             use_parallel=getattr(self.config, 'mcts_enabled', False),
             num_workers=4,
+            use_batched_mcts=getattr(self.config, 'mcts_use_batched', True),
         )
 
         # Initialize loss computer

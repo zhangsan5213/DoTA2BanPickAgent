@@ -1,332 +1,240 @@
-# Dota 2 Ban Pick Agent - AI 编码助手指南
+# AGENTS.md
 
-## 项目概述
+This file provides guidance to AI coding agents working with this repository.
 
-Dota 2 Ban Pick Agent 是一个基于强化学习的项目，用于训练 AI 代理在 Dota 2 队长模式（Captain Mode）中进行智能阵容选择博弈（Ban/Pick）。该项目通过考虑玩家英雄偏好、英雄协同效应和克制关系，学习做出最优决策以最大化获胜概率。
+## Behavioral Guidelines
 
-### 核心特点
+1. **Think before coding.** State assumptions explicitly. If something is unclear, ask. If a
+   simpler approach exists, say so.
+2. **Simplicity first.** No features beyond what was asked, no abstractions for single-use code.
+   If 200 lines could be 50, rewrite it.
+3. **Surgical changes.** Touch only what you must. Match existing style. Remove orphans your
+   change creates, but don't clean up pre-existing code unless asked.
+4. **Goal-driven execution.** Define success criteria before starting. For multi-step tasks,
+   state a brief plan with verification checkpoints.
 
-- **玩家感知的阵容选择**：与通用 Ban/Pick 代理不同，此代理会整合玩家在各英雄上的历史胜率
-- **多模态英雄编码**：结合结构化英雄属性与来自技能描述的文本嵌入
-- **两阶段训练**：监督预训练的 WinRateOracle 为强化学习提供奖励信号，无需完整游戏对局
-- **持续改进**：使用 ELO/TrueSkill 评分系统评估代理版本与历史检查点的对比
-- **遵循官方竞技规则**：实现精确的队长模式 Ban/Pick 序列
-- **现代 RL**：使用带广义优势估计（GAE）的近端策略优化（PPO）
+## Project Overview
 
-## 技术栈
+DoTA2BanPickAgent is an RL project for Dota 2 Captain Mode drafting (Ban/Pick): a transformer
+policy agent (BPTransformerAgent) plays the full 20-step CM sequence against historical
+checkpoints and itself, with a supervised WinRateOracle providing terminal rewards.
 
-- **深度学习框架**: PyTorch + Transformers
-- **强化学习算法**: PPO (Proximal Policy Optimization) + GAE
-- **数据处理**: Pandas, NumPy
-- **评分系统**: ELO, TrueSkill
-- **日志记录**: TensorBoard
-- **配置管理**: YAML
+**Current main line (2026-07)**: MCTS + AlphaZero-style CE training. Rollouts are collected with
+a batched persistent-tree MCTS (`search/mcts_batched.py`); the only per-action training signal is
+cross-entropy against the MCTS visit distribution (`mcts.policy_loss_weight: 1.0`). Plain PPO
+(the pre-July era) never produced policy learning — see `docs/experiments-2026-02-04-ppoa-era.md`.
 
-## 项目结构
+**Language note**: Code comments are mixed Chinese/English (core training files primarily
+Chinese); documentation is English. Write new comments in the language of the surrounding code.
+
+## Docs Navigation (read first)
+
+| Doc | Content |
+|-----|---------|
+| `docs/experiments-2026-07-mcts-ce-line.md` | **MCTS+CE 主线实验记录（2026-07）**：resume 链、5 个 run 数据表、entropy 信号（−4.47→−1.82）、结论与 verdict 规则 |
+| `docs/experiments-2026-02-04-ppoa-era.md` | **旧 PPO 时代（2026-02~04）**：策略冻结证据（entropy −4.76 不动）、oracle 泄漏嫌疑、为何弃用 plain PPO |
+| `CLAUDE.md` | **架构细节**：模型（BPTransformerAgent / WinRateOracle / MultiModalHeroEncoder）、BPState 环境、MCTS 树结构、PPO 训练管线、评分系统、恢复机制 |
+| `TECH_ANALYSIS.md` | 2026-04 技术评审：6 个已修复 bug、7 个设计缺口（其中多数已由 MCTS 线解决） |
+
+## Package Structure
 
 ```
-├── configs/                    # 配置文件目录
-│   ├── bp_agent_config.yaml    # BP Agent 训练配置（主配置）
-│   └── bp_agent_config_debug.yaml  # 调试配置
-│
-├── data/                       # 数据文件目录
-│   ├── hero_features.xlsx      # 英雄属性特征表
-│   ├── hero_semantic_embeddings.pt  # 英雄语义嵌入（来自技能描述）
-│   ├── hero_static_features.pt # 英雄静态特征
-│   ├── hero_ability_descriptions.json  # 英雄技能描述
-│   ├── hero_positions.json     # 英雄位置定义
-│   ├── hero_winrates.json      # 英雄胜率数据
-│   └── high_mmr_with_stats*.json  # 高 MMR 比赛数据（训练数据）
-│
-├── model/                      # 神经网络模型定义
-│   ├── bp_agent.py            # 主 BP Transformer Agent（策略/价值网络）
-│   ├── win_rate_oracle.py     # 胜率预测 Oracle
-│   └── hero_encoder.py        # 多模态英雄编码器
-│
-├── utils/                      # 工具函数
-│   ├── bp_env.py              # RL 环境实现（BPState、GAE、PPO Loss）
-│   ├── raw_data.py            # 数据加载工具（延迟加载英雄特征）
-│   ├── device.py              # 设备管理（CUDA/CPU）
-│   ├── player_preference_sampler_optimized.py  # 玩家偏好采样器
-│   ├── opendota_api.py        # OpenDota API 接口
-│   └── get_data_*.py          # 数据获取脚本
-│
-├── eval/                       # 评估和评分系统
-│   ├── __init__.py            # 评估方法注册和工厂
-│   ├── rating_base.py         # 评分基类定义
-│   ├── elo_rating.py          # ELO 评分实现
-│   └── trueskill_rating.py    # TrueSkill 评分实现
-│
-├── trainer/                    # 模块化训练组件（新架构）
-│   ├── config.py              # 配置管理类
-│   ├── bp_agent_trainer.py    # 主训练器
-│   ├── epoch_runner.py        # 轮次运行器
-│   ├── rollout_collector.py   # 轨迹收集
-│   ├── evaluator.py           # 评估器
-│   ├── loss_computer.py       # 损失计算
-│   └── ...
-│
-├── ckpts/                      # 模型检查点保存目录
-│   ├── win_rate_oracle-*/     # WinRateOracle 检查点
-│   └── bp_agent-*/            # BP Agent 检查点
-│
-├── runs/                       # TensorBoard 日志目录
-│
-├── train_winrate_oracle.py     # WinRateOracle 训练脚本
-├── train_bp_agent.py           # BP Agent 主训练脚本
-└── eval_bp_agent.py            # 评估脚本（锦标赛模式）
+├── configs/
+│   ├── bp_agent_config.yaml         # Main training config (source of truth for hyperparams)
+│   └── bp_agent_config_debug.yaml   # Debug config
+├── data/                            # Hero features, semantic embeddings, winrates, match data
+├── model/
+│   ├── bp_agent.py                  # BPTransformerAgent (dual-backbone policy + value)
+│   ├── win_rate_oracle.py           # WinRateOracle (terminal reward) + OracleTrainingDataset
+│   └── hero_encoder.py              # MultiModalHeroEncoder (id + attributes + text, attention fusion)
+├── utils/
+│   ├── bp_env.py                    # BPState (20-step CM env), collect_rollout (legacy path), PPO loss helpers
+│   ├── batched_rollout.py           # Fully batched rollout collection (ACTIVE training path)
+│   ├── raw_data.py                  # Lazy hero feature loading, valid hero IDs, STATIC_HERO_MASK
+│   ├── device.py                    # CUDA/CPU device singleton
+│   └── player_preference_sampler_optimized.py / get_data_*.py
+├── search/
+│   ├── mcts_batched.py              # Batched persistent-tree MCTS (ACTIVE; GITCGRL-style BattleNode/ActionNode)
+│   └── mcts_draft.py                # Legacy single-threaded MCTS (fallback only, keep in sync cautiously)
+├── eval/
+│   ├── smoke_test_persistent_mcts.py    # Pre-training gate: persistent-tree backprop (DummyAgent, CPU)
+│   ├── smoke_comprehensive.py           # Pre-training gate: real ckpt + full pipeline
+│   ├── smoke_rollout_persistent.py      # Pre-training gate: batched rollout collection
+│   ├── profile_mcts.py                  # MCTS per-decision timing profile (--ckpt)
+│   ├── elo_rating.py / trueskill_rating.py / rating_base.py
+├── trainer/
+│   ├── bp_agent_trainer.py          # Main trainer orchestrator
+│   ├── rollout_collector.py         # Rollout collection dispatch (batched MCTS / threaded / sequential)
+│   ├── loss_computer.py             # MCTS CE loss + value loss + entropy; MC returns
+│   ├── epoch_runner.py              # PPO epoch loop with minibatch shuffle + KL early stop
+│   ├── evaluator.py                 # EvaluatorManager, save_checkpoint
+│   └── checkpoint_manager.py / model_initializer.py / config.py / data_generator.py / tensorboard_logger.py
+├── train_bp_agent.py                # Main training entry point
+├── train_winrate_oracle.py          # Oracle training script
+├── eval_bp_agent.py                 # Tournament evaluation script
+└── dash_app/                        # TODO: has known bugs, do not use
 ```
 
-## 架构详解
-
-### 1. WinRateOracle（胜率预言机）
-
-预训练的神经网络，用于预测给定最终阵容和玩家偏好时的胜率。为强化学习提供奖励信号。
-
-**关键配置**:
-- `embed_dim`: 128
-- `nhead`: 8
-- `num_layers`: 6
-- `use_text`: True（使用文本嵌入）
-- `use_player_heroes`: True（使用玩家英雄偏好）
-
-**当前性能**: 在留出高 MMR 比赛数据上达到约 **90.4%** 的预测准确率。
-
-### 2. BPTransformerAgent（主代理）
-
-基于 Transformer 的策略/价值网络，处理：
-- **玩家偏好**: 编码每位玩家在各英雄上的历史胜率
-- **动作历史**: 编码之前的 Ban/Pick 动作
-- **输出**: 生成下一动作的策略 logits 和状态价值估计
-
-**网络结构**:
-- ActionEncoder: 编码 (actor_team, action_type, target_hero)
-- PlayerEncoder: 编码 5 位玩家的英雄偏好
-- TransformerEncoder: 4 层，8 头，256 维嵌入
-- Policy Head: 输出 NUM_HEROES (160) 维动作概率
-- Value Head: 输出状态价值估计（使用双 CLS token，分别对应 Radiant / Dire 视角）
-
-### 3. 环境（BPState）
-
-实现标准 Dota 2 队长模式 Ban/Pick 顺序（共 20 步）：
-
-1. **Ban Phase 1**: R, D, R, D (4 bans)
-2. **Pick Phase 1**: R, D, D, R (4 picks)
-3. **Ban Phase 2**: D, R, D, R (4 bans)
-4. **Pick Phase 2**: D, R, R, D (4 picks)
-5. **Ban Phase 3**: R, D (2 bans)
-6. **Pick Phase 3**: R, D (2 picks)
-
-总计：**10 bans + 10 picks**（每队 5 ban 5 pick）
-
-## 运行命令
-
-### 环境要求
-
-**默认执行环境**: `E:naconda	eachs	eshin`
-
-**依赖包**:
-```bash
-pip install torch pandas numpy openpyxl tqdm pyyaml tensorboard trueskill
-```
-
-### 1. 训练 WinRateOracle
+## Setup
 
 ```bash
-python train_winrate_oracle.py
+conda run -n torch python ...   # ALL Python execution uses the `torch` conda env (torch 2.11.0+cu130)
 ```
 
-此脚本会：
-1. 从 OpenDota API 获取高 MMR 比赛数据（如需要）
-2. 训练胜率预测模型
-3. 保存检查点到 `./ckpts/win_rate_oracle-*/`
+Dependencies in `requirements.txt` (torch, numpy, scipy, trueskill, pyyaml, tensorboard, tqdm, pandas, openpyxl, dash…).
 
-### 2. 训练 BP Agent
+## Common Commands
+
+### Pre-training gate — run BEFORE any MCTS training experiment
 
 ```bash
-# 使用默认配置
-python train_bp_agent.py
-
-# 使用调试配置
-python train_bp_agent.py --config configs/bp_agent_config_debug.yaml
+conda run -n torch python eval/smoke_test_persistent_mcts.py    # CPU, DummyAgent, ~seconds
+conda run -n torch python eval/smoke_comprehensive.py           # real ckpt, full pipeline (uses e35 by default)
+conda run -n torch python eval/smoke_rollout_persistent.py      # batched rollout collection w/ real ckpt
 ```
 
-配置参数（`configs/bp_agent_config.yaml`）:
-- `actor_lr`: 5e-5（策略网络学习率）
-- `value_loss_coeff`: 2.0（价值损失系数）
-- `entropy_loss_coeff`: 0.03（熵损失系数）
-- `rating.method`: "trueskill" 或 "elo"
-- `training.epochs`: 32（训练轮数）
-- `training.batch_size`: 128（批次大小）
-- `training.historical_opponent_prob`: 0.2（20% 对局使用历史对手）
-- `training.policy_staleness_tolerance`: 2（最近 N 个历史 ckpt 的对手数据也参与训练）
-- `training.num_strata`: 3（TrueSkill 分层抽样的层数）
-- `ppo.minibatch_size`: 64（PPO 小批量大小）
-- `ppo.ppo_epochs`: 4（每批 rollout 的 PPO 更新轮数）
-- `ppo.kl_threshold`: 0.1（KL 早停阈值）
+Status: `smoke_test_persistent_mcts.py` was repaired on 2026-08-02 (it crashed at step 1 —
+see Load-Bearing Conclusions #11). Full re-verification of all three is pending; run them when
+compute is free, before the next training run.
 
-### 3. 评估代理
+### Training
 
 ```bash
-# 让评分最高的前 3 个模型对战，每对进行 3 场比赛
-python eval_bp_agent.py --top_n 3 --matches 3
+# Fresh start
+conda run -n torch python train_bp_agent.py
 
-# 评估指定模型
-python eval_bp_agent.py --models ./ckpts/model1.pth ./ckpts/model2.pth --matches 5
+# Resume (new ckpt/tb dirs always created; previous dir added to historical opponent pool)
+conda run -n torch python train_bp_agent.py --resume ./ckpts/bp_agent-<ts>/bp_agent_epoch<N>.pth
 
-# 使用 ELO 评分选择模型
-python eval_bp_agent.py --top_n 3 --rating elo
+# Debug config
+conda run -n torch python train_bp_agent.py --config configs/bp_agent_config_debug.yaml
 ```
 
-### 4. 查看 TensorBoard 日志
+### Evaluation & benchmarking
 
 ```bash
-tensorboard --logdir ./runs --port 6006
+# Tournament between trained models
+conda run -n torch python eval_bp_agent.py --top_n 3 --matches 3
+
+# MCTS search timing profile (A/B comparable — MUST fix PYTHONHASHSEED)
+PYTHONHASHSEED=0 conda run -n torch python eval/profile_mcts.py --ckpt ./ckpts/bp_agent-20260725-085756/bp_agent_epoch35.pth
+
+# TensorBoard
+tensorboard --logdir runs --port 6006
 ```
 
-## 代码规范
+### A/B methodology
 
-### 文件组织原则
+- Fix `PYTHONHASHSEED=0` for any comparative bench.
+- Judge training by: (1) batch entropy moving down (the only signal that has ever separated
+  learning from frozen), (2) CE loss, (3) TrueSkill vs the historical pool — never by a single
+  run's eval winrate.
+- Record results in `docs/experiments-*.md` and update the Docs Navigation table.
 
-1. **模型定义**放在 `model/` 目录
-2. **工具函数**放在 `utils/` 目录
-3. **训练脚本**放在根目录
-4. **配置**放在 `configs/` 目录
+## Code Conventions & Critical Patterns
 
-### 命名规范
+- **Device**: always `utils.device.DEVICE` for model/data placement.
+- **KMP**: every Python file sets `os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"` at the top.
+- **Hero IDs**: data files are **1-based (1–160)**; model internals are **0-based (0–159)**.
+  Conversion happens at the boundary (`BPState.step` stores `hero_id - 1`; masks index `h - 1`).
+- **Valid heroes**: use `get_valid_hero_ids()` from `utils.raw_data`; `STATIC_HERO_MASK` is the
+  precomputed static mask (invalid heroes = −1e9).
+- **Naming**: PascalCase classes, snake_case functions, UPPER_SNAKE_CASE constants.
+- **MCTS state reconstruction**: nodes store no state; `_reconstruct_state` replays actions from
+  the search root's `_creation_state` or the current state, using cached parent states as a fast
+  path. `BPState.copy()` is a deep copy of history/hero lists (player features are shared by
+  reference but never mutated).
 
-- **类名**: PascalCase（如 `BPTransformerAgent`, `WinRateOracle`）
-- **函数名**: snake_case（如 `compute_gae`, `collect_rollout`）
-- **常量**: UPPER_SNAKE_CASE（如 `NUM_HEROES`, `EMBED_DIM`）
-- **私有函数**: 下划线前缀（如 `_load_hero_data`, `_process_player_feats`）
+## Architecture (summary — full detail in `CLAUDE.md`)
 
-### 注释规范
+- **Environment** (`utils/bp_env.py`): standard CM sequence, 20 steps (ban/pick alternating),
+  action mask = static mask + used heroes. Terminal reward = oracle's Radiant win prob, mapped
+  to [−1, 1]; Radiant steps +mapped, Dire steps −mapped.
+- **MCTS** (`search/mcts_batched.py`): persistent tree per draft (`game_roots` anchor +
+  `pivots` current node, GITCGRL style), alternating BattleNode/ActionNode levels, batched
+  model evaluation grouped by history length, root Dirichlet noise (game root only),
+  `max_search_depth` fast rollout (winrate-greedy heuristic → oracle terminal eval), top-k
+  pruning by prior.
+- **Training** (`trainer/loss_computer.py`): MC returns (γ=1, same terminal target for all steps
+  of a team), MCTS CE loss `−(π · log p)` with `policy_loss_weight=1.0`, value loss coeff 2.0,
+  entropy annealed 0.03→0.01, KL early stop, value-only warmup 2 epochs, grad accumulation 2.
+- **Opponents**: 30% of rollouts vs historical checkpoints (TrueSkill-stratified sampling,
+  `num_strata=3`); stale opponents within tolerance 2 also contribute training data.
 
-- 使用中文注释（项目主要使用中文）
-- 类和方法使用文档字符串说明功能、参数和返回值
-- 关键算法步骤添加行内注释
+## Important Configuration (`configs/bp_agent_config.yaml` — the source of truth)
 
-### 设备管理
+| Param | Value | | Param | Value |
+|-------|-------|-|-------|-------|
+| `actor_lr` | 1e-4 | | `mcts.num_simulations` | 32 |
+| `value_loss_coeff` | 2.0 | | `mcts.c_puct` | 2 |
+| `entropy_loss_coeff` (init/final) | 0.03 / 0.01 | | `mcts.top_k` | 12 |
+| `training.epochs` | 64 | | `mcts.max_search_depth` | 4 |
+| `training.samples_per_epoch` | 128 | | `mcts.dirichlet_alpha/epsilon` | 0.3 / 0.25 |
+| `training.batch_size` / `grad_accum` | 64 / 2 | | `mcts.policy_loss_weight` | 1.0 |
+| `training.value_warmup_epochs` | 2 | | `mcts.use_mcts_policy_loss` | true |
+| `training.historical_opponent_prob` | 0.3 | | `rating.trueskill.beta / tau` | 2.5 / 0.167 |
+| `training.num_strata` | 3 | | `rating.num_player_sets` | 48 (→384 battles/eval) |
+| `ppo.clip_ratio` / `ppo_epochs` / `minibatch_size` | 0.2 / 3 / 64 | | `ppo.kl_threshold` | 0.1 |
 
-所有模型和数据应使用 `utils.device.DEVICE`：
+## Load-Bearing Conclusions (do not re-derive)
 
-```python
-from utils.device import DEVICE
+1. **Plain PPO never produced policy learning** (all Feb–Apr runs): entropy pinned at −4.76 nats
+   (≈ uniform), actor loss ≈ 0, only value trained. Do not re-tune plain-PPO hyperparameters.
+   See `docs/experiments-2026-02-04-ppoa-era.md`.
+2. **MCTS CE is the only line that moved the policy**: entropy −4.47 → −1.82 in the first 5
+   epochs of the July line. It is the main line; the CE gradient is real (verified by the entropy
+   signal, not just code reading).
+3. **July models (~6/64 epochs) do NOT yet beat April baselines**: final leaderboard top =
+   151105/e11 (23.79) and e29 (23.76); July peak e33 = 23.52. This is not a verdict — verdict
+   rules below.
+4. **TrueSkill deltas < ~1σ (σ≈0.87) are ties**; 384-battle evals swing ±2.7 mu epoch-to-epoch.
+   Eval winrate (~0.47–0.54) is NOT a strength metric (self-play + oracle reward).
+5. **Interrupted runs are untrusted**: `bp_agent_final.pth` from a run killed mid-epoch has 2–8
+   eval games and σ≈2–4; its rating is noise. (3 of 5 July resume runs died mid-batch.)
+6. **Oracle**: deployed default is `win_rate_oracle-20260309033516-000-0.9042.pth` (90.42%).
+   The 95.15% checkpoint is the data-leak suspect — never swap it in without re-verifying the
+   leakage question (player `hero_history` may include the match itself).
+7. **Do NOT regress the persistent-tree design**: cross-step backprop through `root_0` and
+   playouts from `pivots` are load-bearing; the smoke test verifies visit accumulation.
+8. **Checkpoint compatibility**: pre-hero_encoder checkpoints load with `strict=False` (random
+   hero encoder) — fine within a game, degrades training quality. The old eval scripts' bugs
+   (TS_ENV undefined, embed_dim mismatch) are FIXED in the working tree — do not reintroduce.
+9. **Everything July 2026 is uncommitted** (last commit 2026-04-16). Results are not reproducible
+   from HEAD — commit the working tree before starting the next experiment.
+10. **MCTS root Dirichlet noise is applied only at the TRUE game root** (first step of a draft),
+    matching GITCGRL — do not apply it per-step.
+11. **An ActionNode must never be a search root** (found 2026-08-02 via the smoke test, which
+    crashed passing an ActionNode as `prev_root`): an ActionNode's only child key is the string
+    `"_battle"`, which would leak into finalized action selection. Contract: `prev_roots[i]` =
+    top BattleNode (trace `next_root` to its parent chain end, as `collect_batched_rollouts`
+    does), `pivots[i]` = the `_battle` BattleNode. `_finalize_searches` filters non-int keys as
+    a guard — do not remove.
+12. **Pivots must be reset before reuse — the July KL-spike root cause** (found 2026-08-03):
+    the `_battle` pivot is created on-demand inside selection, so by the end of a step it is
+    already EXPANDED. `collect_batched_rollouts` reuses it as the next step's pivot; re-expanding
+    only adds children (never removes stale ones), so heroes that were legal last step but are
+    already banned/picked now stay in the tree, get selected, and land in the visit policy π.
+    The training CE mask (−1e9) then overlaps π → `-π·(-1e9)` explodes → `Loss/total` ~1e7–1e8
+    and `KL = inf` on the first batch. This explains the July line's batch-KL 0.17–0.46 spikes,
+    the run that died after 1 batch (KL 0.46), and 3/5 resume runs dying mid-epoch. FIXED:
+    `search_batch` clears the pivot's children/stats before reuse. Do NOT remove — a regression
+    here re-poisons every training run.
 
-model = MyModel().to(DEVICE)
-tensor = tensor.to(DEVICE)
-```
+## Verdict Rules
 
-### 环境变量
+- **No kill before ~50 epochs** of the MCTS-CE line unless a true collapse signature appears:
+  entropy → 0, CE ≈ random on all decisions, wins concentrated on 1–2 player sets.
+- A rating dip alone (even 3+ mu) is NOT a verdict.
+- Before any new MCTS experiment: run the three smoke tests (see Common Commands).
 
-所有 Python 文件开头应设置：
-```python
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-```
+## Known Issues
 
-这是为了解决 OpenMP 相关的库冲突问题。
-
-## 数据文件说明
-
-### hero_features.xlsx
-包含英雄的结构化属性特征（21维）：
-- 基础属性: attr_str, attr_agi, attr_int, attr_all
-- 角色标签: role_Carry, role_Support, role_Pusher 等
-
-### hero_semantic_embeddings.pt
-英雄语义嵌入（1024维），通过处理英雄技能描述文本获得。
-
-### high_mmr_with_stats-rank_40-duration_15.json
-训练数据，包含：
-- 比赛 ID
-- picks_bans: Ban/Pick 序列
-- players: 玩家信息，包含 hero_history（各英雄场次/胜场）
-- radiant_win: 比赛结果
-
-## 训练流程
-
-### 两阶段训练方法
-
-1. **监督预训练阶段**: WinRateOracle 在真实高 MMR 比赛数据上训练，预测胜率
-2. **强化学习微调阶段**: 
-   - 代理与自己对战（80%）或与历史版本对战（20%）
-   - Oracle 在每个 Ban/Pick 序列结束时提供奖励
-   - 每 N 个 epoch 进行评估，新代理与现有检查点对战并评分
-   - 评分较高的代理更可能被采样为对手，推动持续改进
-   - 历史对手采用 **TrueSkill 分层抽样**，确保弱、中、强对手均匀覆盖
-   - **Policy Staleness Tolerance**：最近 2 个历史检查点的对手数据也纳入训练，增加样本多样性
-
-### PPO 训练参数
-
-- **Gamma**: 0.99（折扣因子）
-- **Lambda**: 0.95（GAE 参数）
-- **Clip Epsilon**: 0.2（PPO 裁剪参数）
-- **Value Clip Epsilon**: 0.2（价值裁剪参数）
-- **PPO Epochs**: 4（每批 rollout 复用 4 轮 PPO 更新）
-- **Minibatch Size**: 64（所有有效 steps 打平后按 minibatch 随机 shuffle 更新）
-- **KL Threshold**: 0.1（超过则触发 PPO 早停）
-- **Max Grad Norm**: 0.5（梯度裁剪阈值）
-- **GAE 设计**：Radiant / Dire 分别独立计算 GAE，奖励映射到 [-1, 1]，且 `dones[-1] = 1.0` 保证 terminal episode 不 bootstrap
-
-## 评分系统
-
-支持两种评分方法：
-
-### ELO Rating
-- 初始评分: 1500
-- K 因子: 32
-- 适用于零和博弈的相对强度评估
-
-### TrueSkill
-- 初始 Mu: 25.0
-- 初始 Sigma: 8.33
-- Beta: 4.17
-- 使用高斯分布表示技能水平，考虑不确定性
-
-## 重要注意事项
-
-### Python 环境使用规则
-
-**绝对禁止擅自操作**
-
-1. **禁止擅自操作**：
-   - 永远不会擅自使用 pip、conda 等包管理工具
-   - 禁止对 Python 环境进行任何未授权的修改
-
-2. **默认执行环境**：
-   - 所有代码执行默认使用：`E:naconda	eachs	eshin` 环境
-   - 如需切换环境必须明确获得授权
-
-3. **执行失败处理**：
-   - 如果命令执行失败或无法执行，立即停止操作
-   - 清晰地向用户报告问题，等待指示
-   - 不进行任何尝试性的修复或替代方案
-
-### 关键实现细节
-
-1. **英雄 ID 处理**: 数据文件中使用 1-based ID（1-160），模型内部使用 0-based ID（0-159），注意转换
-2. **有效英雄过滤**: 使用 `get_valid_hero_ids()` 获取实际存在的英雄 ID 集合
-3. **动作掩码**: 在策略输出上应用掩码，防止选择已使用或不存在的英雄
-4. **奖励计算**: Oracle 输出的 Radiant 胜率 `p` 先映射到 `[-1, 1]`（`2p - 1`），Radiant 获得 `+mapped_reward`，Dire 获得 `-mapped_reward`（zero-sum 对称设计）
-
-## 调试技巧
-
-1. **检查数据加载**: 运行 `utils/raw_data.py` 测试英雄特征加载
-2. **测试环境**: 运行 `utils/bp_env.py` 测试 BP 环境和 GAE 计算
-3. **测试模型**: 各模型文件包含 `if __name__ == "__main__"` 测试代码
-4. **TensorBoard**: 实时监控损失、准确率、评分等指标
-
-## 相关文件快速参考
-
-| 功能 | 文件 |
-|------|------|
-| 主训练脚本 | `train_bp_agent.py` |
-| Oracle 训练 | `train_winrate_oracle.py` |
-| 评估脚本 | `eval_bp_agent.py` |
-| BP Agent 模型 | `model/bp_agent.py` |
-| Oracle 模型 | `model/win_rate_oracle.py` |
-| 英雄编码器 | `model/hero_encoder.py` |
-| 环境实现 | `utils/bp_env.py` |
-| 主配置 | `configs/bp_agent_config.yaml` |
-| 评分系统 | `eval/` 目录 |
+1. Old checkpoints (pre-hero_encoder, e.g. `bp_agent-20260418-*`) load with `strict=False`
+   leaving a randomly-initialized hero encoder. Weights don't change between steps within a game
+   (MCTS correctness unaffected) but model quality degrades in training.
+2. Oracle data-leak suspicion: `hero_history` in training data may include the match itself
+   (see `TECH_ANALYSIS.md`); the deployed 0.9042 model predates the suspicion.
+3. `search/mcts_draft.py` is a legacy single-threaded implementation used only by the
+   sequential/threaded fallback paths (`use_batched: false`); it is NOT used in the default
+   config. Keep it working but prefer the batched path.
+4. `dash_app/` has known bugs — do not use until fixed.

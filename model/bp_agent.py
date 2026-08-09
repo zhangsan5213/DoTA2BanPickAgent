@@ -83,7 +83,7 @@ class PlayerEncoder(nn.Module):
 
 
 class BPTransformerAgent(nn.Module):
-    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=6, learnable_temperature=False):
+    def __init__(self, embed_dim=EMBED_DIM, nhead=8, num_layers=4, learnable_temperature=False):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heroes = NUM_HEROES
@@ -95,9 +95,9 @@ class BPTransformerAgent(nn.Module):
             self.register_buffer('temperature', torch.ones(1))
         self.learnable_temperature = learnable_temperature
 
-        # Hero encoder: 使用多模态英雄编码器（属性 + 语义）
+        # Hero encoder: 使用多模态英雄编码器（属性 + 语义），固定 embed_dim=128 以匹配 oracle
         self.hero_encoder = MultiModalHeroEncoder(
-            embed_dim=embed_dim,
+            embed_dim=128,
             id_hidden_dim=128,
             attr_hidden_dim=64,
             use_text=True,
@@ -108,24 +108,47 @@ class BPTransformerAgent(nn.Module):
             attn_heads=4,
             modality_dropout=0.1,
         )
+        # 将 hero_encoder 的输出从 128 投影到 agent 的 embed_dim
+        self.hero_proj = nn.Sequential(
+            nn.Linear(128, embed_dim),
+            nn.LayerNorm(embed_dim),
+            nn.SiLU(),
+        )
 
         self.action_encoder = ActionEncoder(embed_dim)
         self.player_encoder = PlayerEncoder(embed_dim)
         self.cls_tokens = nn.Parameter(torch.randn(1, 2, embed_dim))  # [radiant, dire]
 
-        encoder_layer = nn.TransformerEncoderLayer(
+        # Actor transformer backbone - smaller and focused on policy
+        actor_encoder_layer = nn.TransformerEncoderLayer(
             d_model=embed_dim,
             nhead=nhead,
             dim_feedforward=embed_dim * 4,
             batch_first=True,
             dropout=0.1,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.actor_transformer = nn.TransformerEncoder(actor_encoder_layer, num_layers=num_layers)
 
+        # Value transformer backbone - larger and more powerful (double the layers)
+        value_encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=nhead,
+            dim_feedforward=embed_dim * 8,  # Double the feedforward dim
+            batch_first=True,
+            dropout=0.1,
+        )
+        self.value_transformer = nn.TransformerEncoder(value_encoder_layer, num_layers=num_layers + 2)  # +2 layers
+
+        # Policy head is simple linear projection
         self.policy_head = nn.Linear(embed_dim, NUM_HEROES)
         setattr(self.policy_head, "_is_policy_head", True)
+
+        # Value head is much larger - double the capacity of policy backbone
         self.value_head = nn.Sequential(
-            nn.Linear(embed_dim, 512),
+            nn.Linear(embed_dim, 1024),
+            nn.SiLU(),
+            nn.Dropout(0.1),
+            nn.Linear(1024, 512),
             nn.SiLU(),
             nn.Dropout(0.1),
             nn.Linear(512, 256),
@@ -206,8 +229,9 @@ class BPTransformerAgent(nn.Module):
         attrs = attrs.unsqueeze(1)       # [N, 1, F]
         sem = sem.unsqueeze(1)           # [N, 1, S]
 
-        encoded = self.hero_encoder(indices, attrs, sem)  # [N, 1, embed_dim]
-        encoded = encoded.squeeze(1)  # [N, embed_dim]
+        encoded = self.hero_encoder(indices, attrs, sem)  # [N, 1, 128]
+        encoded = encoded.squeeze(1)  # [N, 128]
+        encoded = self.hero_proj(encoded)  # [N, embed_dim]
 
         return encoded.view(*original_shape, -1)
 
@@ -274,13 +298,15 @@ class BPTransformerAgent(nn.Module):
         all_players = torch.cat([r_player_emb, d_player_emb], dim=1)
         seq = torch.cat([cls_tokens, all_players, action_emb, current_q], dim=1)
 
-        out = self.transformer(seq)
+        # Separate forward passes for actor and value
+        actor_out = self.actor_transformer(seq)
+        value_out = self.value_transformer(seq)
 
-        policy_feat = out[:, -1, :]
+        policy_feat = actor_out[:, -1, :]
         action_logits = self.policy_head(policy_feat)
 
-        radiant_cls_feat = out[:, 0, :]
-        dire_cls_feat = out[:, 1, :]
+        radiant_cls_feat = value_out[:, 0, :]
+        dire_cls_feat = value_out[:, 1, :]
         current_actor = state["current_actor"].unsqueeze(-1)  # [B, 1]
         cls_feat = torch.where(current_actor == 0, radiant_cls_feat, dire_cls_feat)
         value = self.value_head(cls_feat)

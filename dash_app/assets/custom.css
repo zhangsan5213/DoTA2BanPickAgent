@@ -1,0 +1,112 @@
+/* Custom styles for DOTA2 BP Visualizer */
+
+/* General body styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #111827;
+    color: #f3f4f6;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Dash dropdown customization */
+.Select-control {
+    background-color: #374151 !important;
+    border-color: #4b5563 !important;
+}
+
+.Select-menu-outer {
+    background-color: #374151 !important;
+    border-color: #4b5563 !important;
+}
+
+.Select-option {
+    background-color: #374151 !important;
+    color: #f3f4f6 !important;
+}
+
+.Select-option.is-focused {
+    background-color: #4b5563 !important;
+}
+
+.Select-value-label {
+    color: #f3f4f6 !important;
+}
+
+.Select-placeholder {
+    color: #9ca3af !important;
+}
+
+/* Dash slider customization */
+.rc-slider-track {
+    background-color: #3b82f6 !important;
+}
+
+.rc-slider-handle {
+    border-color: #3b82f6 !important;
+    background-color: #3b82f6 !important;
+}
+
+.rc-slider-handle:hover {
+    border-color: #60a5fa !important;
+    background-color: #60a5fa !important;
+}
+
+.rc-slider-dot-active {
+    border-color: #3b82f6 !important;
+}
+
+/* Radio items customization */
+input[type="radio"] {
+    accent-color: #3b82f6;
+}
+
+/* Button styling */
+button {
+    transition: all 0.15s ease;
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+/* Cytoscape container */
+#mcts-tree {
+    border: 1px solid #374151;
+    border-radius: 0.5rem;
+}
+
+/* Plotly charts customization */
+.js-plotly-plot .plotly {
+    background-color: transparent !important;
+}
+
+/* Hero avatar placeholder */
+.hero-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #374151;
+    border: 2px solid #4b5563;
+    border-radius: 0.25rem;
+    color: #6b7280;
+}

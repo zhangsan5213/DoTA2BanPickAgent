@@ -17,6 +17,7 @@ from pathlib import Path
 from functools import lru_cache
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
+from tqdm import tqdm
 
 # ============== 全局缓存 ==============
 _hero_features_cache: Optional[pd.DataFrame] = None
@@ -316,35 +317,37 @@ def sample_player_preferences_batch(
         # 多进程并行
         if n_workers is None:
             n_workers = min(mp.cpu_count(), 8)
-        
+
         # 将任务分批
         batch_size = max(1, num_players // n_workers)
         batches = [
             (player_positions[i:i+batch_size], m, n, data_path, positions_path)
             for i in range(0, num_players, batch_size)
         ]
-        
+
         with ProcessPoolExecutor(max_workers=n_workers) as executor:
             futures = [
                 executor.submit(_sample_batch_worker, batch)
                 for batch in batches
             ]
-            
+
             results = []
             player_id = 0
-            for future in as_completed(futures):
-                batch_results = future.result()
-                for player_data in batch_results:
-                    player_data['player_id'] = player_id
-                    results.append(player_data)
-                    player_id += 1
-        
+            with tqdm(total=num_players, desc="Generating Player Preferences", leave=False, ncols=90) as pbar:
+                for future in as_completed(futures):
+                    batch_results = future.result()
+                    for player_data in batch_results:
+                        player_data['player_id'] = player_id
+                        results.append(player_data)
+                        player_id += 1
+                        pbar.update(1)
+
         # 按player_id排序
         results.sort(key=lambda x: x['player_id'])
     else:
         # 单进程批量生成
         results = []
-        for i, position in enumerate(player_positions):
+        for i, position in enumerate(tqdm(player_positions, desc="Generating Player Preferences", leave=False, ncols=90)):
             heroes = sample_player_preference_fast(
                 position=position,
                 m=m,
@@ -355,7 +358,7 @@ def sample_player_preferences_batch(
                 'position': int(position),
                 'heroes': heroes
             })
-    
+
     return results
 
 

@@ -268,8 +268,10 @@ class BPBattleSimulator(BattleSimulatorBase):
     
     def load_agent(self, model_path: str) -> BPTransformerAgent:
         """加载 BP Agent 模型"""
-        agent = BPTransformerAgent(embed_dim=128, nhead=8, num_layers=4).to(DEVICE)
-        agent.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        agent = BPTransformerAgent(embed_dim=256, nhead=8, num_layers=4).to(DEVICE)
+        ckpt = torch.load(model_path, map_location=DEVICE)
+        state_dict = ckpt["agent_state"] if isinstance(ckpt, dict) and "agent_state" in ckpt else ckpt
+        agent.load_state_dict(state_dict)
         agent.eval()
         return agent
     
@@ -565,24 +567,24 @@ def evaluate_and_update_elo(
     }
 
 
-def print_elo_leaderboard(save_dir: str = "./ckpts/bp_agent"):
+def print_elo_leaderboard(save_dir: str = "./ckpts/bp_agent", name_overrides=None):
     """打印 ELO 排行榜"""
     elo_manager = EloRatingManager(save_dir)
-    
+
     models = elo_manager.list_all_models()
     if len(models) == 0:
         print("[ELO] No models found")
         return
-    
+
     # 按 ELO 排序
     models.sort(key=lambda x: x[1], reverse=True)
-    
+
     print(f"\n{'='*70}")
     print(f"ELO Leaderboard")
     print(f"{'='*70}")
     print(f"{'Rank':<6}{'Model':<50}{'ELO':<10}{'W/L/D':<15}")
     print(f"{'-'*70}")
-    
+
     for rank, (path, elo) in enumerate(models, 1):
         record = elo_manager.get_record(path)
         if record:
@@ -590,8 +592,10 @@ def print_elo_leaderboard(save_dir: str = "./ckpts/bp_agent"):
         else:
             wl = "0/0/0"
         model_name = os.path.basename(path)[:48]
+        if name_overrides and path in name_overrides:
+            model_name = name_overrides[path][:48]
         print(f"{rank:<6}{model_name:<50}{elo:<10}{wl:<15}")
-    
+
     print(f"{'='*70}\n")
 
 
@@ -687,9 +691,9 @@ class EloEvaluator(RatingEvaluatorBase):
             record = self.rating_manager.register_model(model_path)
         return record.elo
     
-    def print_leaderboard(self):
+    def print_leaderboard(self, name_overrides=None):
         """打印 ELO 排行榜"""
-        print_elo_leaderboard(save_dir=self.save_dir)
+        print_elo_leaderboard(save_dir=self.save_dir, name_overrides=name_overrides)
     
     def register_model(self, model_path: str, elo: int = INITIAL_ELO) -> ModelEloRecord:
         """手动注册模型"""

@@ -36,6 +36,12 @@ class TrainingConfig:
         ts_cfg = rating_cfg.get("trueskill", {})
         self.ts_staleness_threshold = ts_cfg.get("staleness_threshold", 5)
         self.ts_num_active_models = ts_cfg.get("num_active_models", 5)
+        self.ts_initial_mu = ts_cfg.get("initial_mu", 25.0)
+        self.ts_initial_sigma = ts_cfg.get("initial_sigma", 25.0 / 3)
+        self.ts_beta = ts_cfg.get("beta", (25.0 / 3) / 2)
+        self.ts_tau = ts_cfg.get("tau", (25.0 / 3) / 100)
+        self.ts_draw_probability = ts_cfg.get("draw_probability", 0.0)
+        self.ts_opponent_sample_std = ts_cfg.get("opponent_sample_std", 2.0)
 
         # Training config
         training_cfg = cfg.get("training", {})
@@ -89,9 +95,13 @@ class TrainingConfig:
         # MCTS config
         mcts_cfg = cfg.get("mcts", {})
         self.mcts_enabled = mcts_cfg.get("enabled", False)
+        self.mcts_use_batched = mcts_cfg.get("use_batched", True)
         self.mcts_num_simulations = mcts_cfg.get("num_simulations", 64)
         self.mcts_c_puct = float(mcts_cfg.get("c_puct", 1.5))
         self.mcts_top_k = mcts_cfg.get("top_k", 20)
+        self.mcts_dirichlet_alpha = float(mcts_cfg.get("dirichlet_alpha", 0.0))
+        self.mcts_dirichlet_epsilon = float(mcts_cfg.get("dirichlet_epsilon", 0.0))
+        self.mcts_max_search_depth = int(mcts_cfg.get("max_search_depth", 0))
         self.mcts_policy_loss_weight = float(mcts_cfg.get("policy_loss_weight", 1.0))
         self.mcts_use_policy_loss = bool(mcts_cfg.get("use_mcts_policy_loss", False))
 

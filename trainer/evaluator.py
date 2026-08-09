@@ -1,7 +1,7 @@
 """Evaluation management."""
 
 import os
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import torch
 
 from eval import EvalMethod, get_evaluator, RatingEvaluatorBase
@@ -55,12 +55,21 @@ class EvaluatorManager:
                     "staleness_threshold": config.ts_staleness_threshold,
                     "num_active_models": config.ts_num_active_models,
                     "additional_dirs": additional_dirs,
+                    "initial_mu": config.ts_initial_mu,
+                    "initial_sigma": config.ts_initial_sigma,
+                    "beta": config.ts_beta,
+                    "tau": config.ts_tau,
+                    "draw_probability": config.ts_draw_probability,
+                    "opponent_sample_std": config.ts_opponent_sample_std,
                 }
             )
 
         self.rating_evaluator: RatingEvaluatorBase = get_evaluator(
             self.eval_method, **self.eval_kwargs
         )
+
+        # Track rating history for plotting
+        self.rating_history: List[Tuple[int, float]] = []
 
     def set_writer(self, writer):
         """Set TensorBoard writer."""
@@ -91,13 +100,17 @@ class EvaluatorManager:
             num_player_sets=self.config.rating_num_player_sets,
         )
 
-        # Print leaderboard
+        # Print leaderboard with epoch name for current model
         print("\n[+] Leaderboard:")
-        self.rating_evaluator.print_leaderboard()
+        name_overrides = {model_path: f"bp_agent_epoch{epoch}"}
+        self.rating_evaluator.print_leaderboard(name_overrides=name_overrides)
 
         # Log to TensorBoard
         if self.writer is not None:
             self._log_ratings(model_path, eval_result, epoch)
+
+        # Plot and display rating history (overwrite same PNG each time)
+        self._plot_rating_history()
 
         # Log evaluation details
         if "results" in eval_result:
@@ -132,10 +145,12 @@ class EvaluatorManager:
             self.writer.add_scalar(
                 f"Rating/{self.method_name.lower()}_rating", record.rating, epoch
             )
+            self.rating_history.append((epoch, record.rating))
         else:
             self.writer.add_scalar(
                 f"Rating/{self.method_name.lower()}_rating", record.elo, epoch
             )
+            self.rating_history.append((epoch, float(record.elo)))
 
         # Log average win rate
         if eval_result.get("results"):
@@ -179,16 +194,116 @@ class EvaluatorManager:
                         record.rating,
                         total_epochs,
                     )
+                    self.rating_history.append((total_epochs, record.rating))
                 else:
                     self.writer.add_scalar(
                         f"Rating/{self.method_name.lower()}_rating",
                         record.elo,
                         total_epochs,
                     )
+                    self.rating_history.append((total_epochs, float(record.elo)))
             self.writer.flush()
 
-        # Print final leaderboard
-        self.rating_evaluator.print_leaderboard()
+        # Print final leaderboard with epoch name override for final model
+        name_overrides = {model_path: f"bp_agent_epoch{total_epochs}"}
+        self.rating_evaluator.print_leaderboard(name_overrides=name_overrides)
+
+        # Plot and display rating history
+        self._plot_rating_history()
+
+    def _plot_rating_history(self):
+        """Plot rating history over epochs and save to tensorboard log dir.
+        Overwrites the same PNG file each time so the path stays constant."""
+        if not self.rating_history:
+            print("[!] No rating history to plot")
+            return
+
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+        except ImportError:
+            print("[!] matplotlib not available, skipping rating history plot")
+            return
+
+        epochs = [e for e, _ in self.rating_history]
+        ratings = [r for _, r in self.rating_history]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, ratings, marker="o", linewidth=2, markersize=6, color="#1f77b4")
+        ax.set_xlabel("Epoch", fontsize=12)
+        ax.set_ylabel(f"{self.method_name} Rating", fontsize=12)
+        ax.set_title(f"{self.method_name} Rating vs Epoch", fontsize=14)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlim(0, max(epochs) + 1)
+
+        # Annotate final point
+        if ratings:
+            ax.annotate(
+                f"{ratings[-1]:.1f}",
+                xy=(epochs[-1], ratings[-1]),
+                xytext=(epochs[-1], ratings[-1] + max(abs(min(ratings)), abs(max(ratings))) * 0.05),
+                ha="center",
+                fontsize=10,
+                arrowprops=dict(arrowstyle="->", color="red"),
+            )
+
+        plt.tight_layout()
+
+        # Save to tensorboard log dir (same path every time)
+        if self.writer is not None:
+            log_dir = getattr(self.writer, "log_dir", None)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
+                plot_path = os.path.join(
+                    log_dir, f"{self.method_name.lower()}_rating_history.png"
+                )
+                plt.savefig(plot_path, dpi=150)
+                print(f"[+] Rating history plot saved to {plot_path}")
+                self._display_image_in_terminal(plot_path)
+
+        plt.close()
+
+    def _display_image_in_terminal(self, image_path: str):
+        """Display an image in the terminal using ANSI colors and half-block characters."""
+        try:
+            from PIL import Image
+        except ImportError:
+            print("[!] Pillow not available, cannot display image in terminal")
+            return
+
+        try:
+            img = Image.open(image_path)
+            img = img.convert("RGBA")
+
+            width, height = img.size
+            aspect_ratio = height / width / 1.8
+            new_width = 80
+            new_height = int(new_width * aspect_ratio)
+
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            pixels = img.load()
+
+            print()
+            for y in range(0, new_height, 2):
+                line = ""
+                for x in range(new_width):
+                    r1, g1, b1, a1 = pixels[x, y]
+                    if y + 1 < new_height:
+                        r2, g2, b2, a2 = pixels[x, y + 1]
+                    else:
+                        r2, g2, b2, a2 = 0, 0, 0, 0
+
+                    if a1 < 128:
+                        r1, g1, b1 = 0, 0, 0
+                    if a2 < 128:
+                        r2, g2, b2 = 0, 0, 0
+
+                    line += f"\033[48;2;{r1};{g1};{b1}m\033[38;2;{r2};{g2};{b2}m\u2584\033[0m"
+                print(line)
+            print()
+        except Exception as e:
+            print(f"[!] Failed to display image in terminal: {e}")
 
 
 def save_checkpoint(
